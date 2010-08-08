@@ -1,0 +1,23 @@
+Drop-Count for LootCount
+
+Drop-Count for LootCount in short
+It will maintain a database over drop-rates (how often and from what mob) for items dropped by mobs.
+
+The collected information can be viewed in two ways:
+1: When you mouse-over a mob, you can hold down <alt> to display a list of items the mob may drop.
+2: When you mouse-over an item, you can press <alt> to display the mobs that drops this item.
+
+Functionality
+Drop-Count for LootCount is a plug-in for the addon LootCount, and can thus be placed as a LootCount icon/watch. After positioning the plug-in within LootCount (fomr the LootCount menu) it will show up as a questionmark. You must now drop an item on it, and it will change to the icon of the item you dropped. When you start killing mobs, the icon will update with a percentage-number denoting the dropchance of the item. If you kill only mobs that have 100% drop-chance of the item, the number will be 100. If you kill equal amounts of mobs that drops it 100% and 0% it will show 50, and so on. This number is derived from kills the last 15 minutes.
+So if you are grinding for a specific item and this number is low, then you should probably go somewhere else.
+
+Colour coding
+In the list of mobs that drops the item, the mobs are colour-coded from red to green. A red mob-name is a mob that you have not killed many of, and the reported drop-rate may be inaccurate. The more mobs you kill, the greener the name gets - and the reported drop-rate will be a lot more accurate.
+
+The data
+Drop-Count for LootCount does not come with a pre-built database, so When you first install it, it is empty. Start killing mobs, and it will provide information for you quite fast.
+
+Special items
+Normal items are counted on a per-kill basis.
+Skinning-drops are counted on a per-skinned basis.
+Quest-items are not counted, as the will require you to be on a quest for it to drop. These items will however show up as "Quest" in stead of a percentage.

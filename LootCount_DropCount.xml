@@ -1,0 +1,263 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"   xsi:schemaLocation="http://www.blizzard.com/wow/ui/">
+	<Script file="LootCount_DropCount.lua" />
+	<GameTooltip name="LootCount_DropCount_TT" inherits="GameTooltipTemplate" frameStrata="TOOLTIP" hidden="true"/>
+	<GameTooltip name="LootCount_DropCount_CF" inherits="GameTooltipTemplate" parent="UIParent" hidden="true"/>
+	<Frame name="LootCount_DropCount_HiddenCacheFrame" visible="false">
+		<Scripts>
+			<OnLoad>DropCountXML:OnLoad();</OnLoad>
+			<OnEvent>DropCountXML:OnEvent(event);</OnEvent>
+			<OnUpdate>DropCountXML:OnUpdate(arg1);</OnUpdate>
+		</Scripts>
+	</Frame>
+
+	<Button name="LCDC_VendorFlagTemplate" inherits="ItemButtonTemplate" frameStrata="HIGH" virtual="true">
+		<Size><AbsDimension x="12" y="12" /></Size>
+		<NormalTexture name="$parentNormalTexture" file=""/>
+		<Scripts>
+			<OnEnter>DropCountXML:OnEnterIcon();</OnEnter>
+			<OnLeave>ResetCursor();LootCount_DropCount_TT:Hide();LCDC_VendorFlag_Info=nil;</OnLeave>
+		</Scripts>
+	</Button>
+
+	<!--  Minimap Icon  -->
+	<Frame name="DropCount_MinimapIcon" enableMouse="true" frameStrata="LOW" parent="Minimap">
+		<Size><AbsDimension x="32" y="32"/></Size>
+		<Anchors>
+			<Anchor point="TOPLEFT" relativeTo="Minimap" relativePoint="RIGHT"><Offset><AbsDimension x="2" y="0"/></Offset></Anchor>
+		</Anchors>
+		<Frames>
+			<Button name="$parent_Button">
+				<Size><AbsDimension x="32" y="32"/></Size>
+				<Anchors><Anchor point="TOPLEFT"><Offset><AbsDimension x="0" y="0"/></Offset></Anchor>
+				</Anchors>
+				<Layers>
+					<Layer level="BORDER">
+						<Texture name="$parentIcon" file="Interface\GroupFrame\UI-Group-MasterLooter">
+							<Size><AbsDimension x="20" y="20"/>	</Size>
+							<Anchors>
+								<Anchor point="CENTER"><Offset><AbsDimension x="-2" y="1"/></Offset></Anchor>
+							</Anchors>
+						</Texture>
+					</Layer>
+					<Layer level="OVERLAY">
+						<Texture name="$parentBorder" file="Interface\Minimap\MiniMap-TrackingBorder">
+							<Size><AbsDimension x="52" y="52"/></Size>
+							<Anchors><Anchor point="TOPLEFT"/></Anchors>
+						</Texture>
+					</Layer>
+				</Layers>
+				<HighlightTexture alphaMode="ADD" file="Interface\Minimap\UI-Minimap-ZoomButton-Highlight"/>
+				<Scripts>
+					<OnLoad>this:RegisterForDrag("RightButton");this.dragme=false;</OnLoad>
+					<OnDragStart>this.dragme=true;</OnDragStart>
+					<OnDragStop>this.dragme=false;</OnDragStop>
+					<OnUpdate>if(this.dragme==true) then DropCountXML.MinimapBeingDragged(); end </OnUpdate>
+					<OnClick>DropCountXML.MinimapOnClick();</OnClick>
+					<OnEnter>DropCountXML.MinimapOnEnter();</OnEnter>
+					<OnLeave>GameTooltip:Hide();</OnLeave>
+				</Scripts>
+			</Button>
+		</Frames>
+		<Scripts>
+			<OnLoad>
+			</OnLoad>
+			<OnEvent>
+			</OnEvent>
+		</Scripts>
+	</Frame>
+
+	<ScrollFrame name="LCDC_ScrollTemplate" virtual="true">
+		<Frames>
+			<Slider name="$parentScrollBar">
+				<Size><AbsDimension x="16" y="0" /></Size>
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="TOPRIGHT"><Offset><AbsDimension x="6" y="-16" /></Offset></Anchor>
+					<Anchor point="BOTTOMLEFT" relativePoint="BOTTOMRIGHT"><Offset><AbsDimension x="6" y="16" /></Offset></Anchor>
+				</Anchors>
+				<Frames>
+					<Button name="$parentScrollUpButton">
+						<Size><AbsDimension x="16" y="16" /></Size>
+						<Anchors><Anchor point="BOTTOM" relativePoint="TOP" /></Anchors>
+						<Scripts>
+							<OnClick>
+								--local parent=this:GetParent(); parent:SetValue(parent:GetValue()-(parent:GetHeight()/2));
+							</OnClick>
+						</Scripts>
+						<NormalTexture file="Interface\Buttons\UI-ScrollBar-ScrollUpButton-Up"><TexCoords left="0.25" right="0.75" top="0.25" bottom="0.75" /></NormalTexture>
+						<PushedTexture file="Interface\Buttons\UI-ScrollBar-ScrollUpButton-Down"><TexCoords left="0.25" right="0.75" top="0.25" bottom="0.75" /></PushedTexture>
+						<DisabledTexture file="Interface\Buttons\UI-ScrollBar-ScrollUpButton-Disabled"><TexCoords left="0.25" right="0.75" top="0.25" bottom="0.75" /></DisabledTexture>
+						<HighlightTexture file="Interface\Buttons\UI-ScrollBar-ScrollUpButton-Highlight" alphaMode="ADD"><TexCoords left="0.25" right="0.75" top="0.25" bottom="0.75" /></HighlightTexture>
+					</Button>
+					<Button name="$parentScrollDownButton">
+						<Size><AbsDimension x="16" y="16" /></Size>
+						<Anchors><Anchor point="TOP" relativePoint="BOTTOM" /></Anchors>
+						<Scripts>
+							<OnClick>
+								--local parent=this:GetParent(); parent:SetValue(parent:GetValue()+(parent:GetHeight()/2));
+							</OnClick>
+						</Scripts>
+						<NormalTexture file="Interface\Buttons\UI-ScrollBar-ScrollDownButton-Up"><TexCoords left="0.25" right="0.75" top="0.25" bottom="0.75" /></NormalTexture>
+						<PushedTexture file="Interface\Buttons\UI-ScrollBar-ScrollDownButton-Down"><TexCoords left="0.25" right="0.75" top="0.25" bottom="0.75" /></PushedTexture>
+						<DisabledTexture file="Interface\Buttons\UI-ScrollBar-ScrollDownButton-Disabled"><TexCoords left="0.25" right="0.75" top="0.25" bottom="0.75" /></DisabledTexture>
+						<HighlightTexture file="Interface\Buttons\UI-ScrollBar-ScrollDownButton-Highlight" alphaMode="ADD"><TexCoords left="0.25" right="0.75" top="0.25" bottom="0.75" /></HighlightTexture>
+					</Button>
+				</Frames>
+				<Scripts>
+					<OnValueChanged>
+						--this:GetParent():SetVerticalScroll(arg1);
+					</OnValueChanged>
+				</Scripts>
+				<ThumbTexture name="$parentThumbTexture" file="Interface\Buttons\UI-ScrollBar-Knob">
+					<Size><AbsDimension x="16" y="16" /></Size>
+					<TexCoords left="0.25" right="0.75" top="0.25" bottom="0.75" />
+				</ThumbTexture>
+			</Slider>
+		</Frames>
+		<Scripts>
+			<OnLoad>ScrollFrame_OnLoad(this);</OnLoad>
+			<OnMouseWheel>ScrollFrameTemplate_OnMouseWheel(arg1);</OnMouseWheel>
+			<OnVerticalScroll>
+				local scrollbar=getglobal(this:GetName().."ScrollBar");
+				scrollbar:SetValue(arg1);
+				local min,max=scrollbar:GetMinMaxValues();
+				if (arg1==0) then
+					getglobal(scrollbar:GetName().."ScrollUpButton"):Disable();
+				else
+					getglobal(scrollbar:GetName().."ScrollUpButton"):Enable();
+				end
+				if ((scrollbar:GetValue()-max)==0) then
+					getglobal(scrollbar:GetName().."ScrollDownButton"):Disable();
+				else
+					getglobal(scrollbar:GetName().."ScrollDownButton"):Enable();
+				end
+			</OnVerticalScroll>
+			<OnScrollRangeChanged>ScrollFrame_OnScrollRangeChanged(arg2);</OnScrollRangeChanged>
+		</Scripts>
+	</ScrollFrame>
+
+	<Frame name="LootCount_DropCount_MenuOptions" inherits="UIDropDownMenuTemplate" parent="LootCount_Frame0" id="1">
+		<Scripts><OnLoad>DropCountXML:BuildMenu(this);</OnLoad></Scripts>
+	</Frame>
+
+	<Frame name="LCDC_VendorSearch" frameStrata="HIGH" toplevel="true" movable="true" enableMouse="true" hidden="true" parent="UIParent">
+		<Size>
+			<AbsDimension x="400" y="450"/>
+		</Size>
+		<Anchors>
+			<Anchor point="TOPLEFT"><Offset><AbsDimension x="50" y="-104"/></Offset></Anchor>
+		</Anchors>
+
+		<TitleRegion setAllPoints="true"/>
+		<Backdrop edgeFile="Interface\TutorialFrame\TutorialFrameBorder" tile="true">
+			<EdgeSize><AbsValue val="32"/></EdgeSize>
+			<TileSize><AbsValue val="16"/></TileSize>
+			<BackgroundInsets><AbsInset left="2" right="2" top="2" bottom="2"/></BackgroundInsets>
+		</Backdrop>
+		<Frames>
+			<!-- The window closer -->
+			<Button name="$parent_CloseButton" inherits="UIPanelCloseButton">
+				<Anchors>
+					<Anchor point="CENTER" relativeTo="$parent" relativePoint="TOPRIGHT"><Offset><AbsDimension x="-12" y="-12"/></Offset></Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>this:GetParent():Hide();</OnClick>
+				</Scripts>
+			</Button>
+			<!-- The search-term -->
+			<EditBox name="$parent_FindText" autoFocus="true">
+				<Size><AbsDimension x="201" y="20"/></Size>
+				<Anchors><Anchor point="TOPLEFT" relativeTo="$parent" relativePoint="TOPLEFT">
+					<Offset><AbsDimension x="75" y="-31"/></Offset></Anchor>
+				</Anchors>
+				<TextInsets><Offset><AbsDimension x="5"/></Offset></TextInsets>
+				<Layers>
+					<Layer level="BACKGROUND">
+						<Texture name="$parentLeft" file="Interface\Common\Common-Input-Border">
+							<Size><AbsDimension x="8" y="20"/></Size>
+							<Anchors><Anchor point="LEFT"/></Anchors>
+							<TexCoords left="0" right="0.0625" top="0" bottom="0.625"/>
+						</Texture>
+						<Texture name="$parentRight" file="Interface\Common\Common-Input-Border">
+							<Size><AbsDimension x="8" y="20"/></Size>
+							<Anchors><Anchor point="RIGHT"/></Anchors>
+							<TexCoords left="0.9375" right="1" top="0" bottom="0.625"/>
+						</Texture>
+						<Texture name="$parentMiddle" file="Interface\Common\Common-Input-Border">
+							<Size><AbsDimension x="10" y="20" /></Size>
+							<Anchors>
+								<Anchor point="LEFT" relativeTo="$parentLeft" relativePoint="RIGHT"/>
+								<Anchor point="RIGHT" relativeTo="$parentRight" relativePoint="LEFT"/>
+							</Anchors>
+							<TexCoords left="0.0625" right="0.9375" top="0" bottom="0.625" />
+						</Texture>
+					</Layer>
+				</Layers>
+				<FontString inherits="GameFontNormal"/>
+				<Scripts>
+					<OnLoad>this:SetTextInsets(3,2,0,0);</OnLoad>
+					<OnEscapePressed>this:ClearFocus();</OnEscapePressed>
+					<OnEnter>GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Enter full or partial search-pattern");GameTooltip:Show();</OnEnter>
+					<OnLeave>ResetCursor();GameTooltip:Hide();</OnLeave>
+				</Scripts>
+			</EditBox>
+			<!-- Search result -->
+			<ScrollFrame name="LCDC_ResultListScroll" inherits="LCDC_ScrollTemplate">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="TOPLEFT" relativeTo="LCDC_VendorSearch">
+						<Offset>
+							<AbsDimension x="20" y="-70" />
+						</Offset>
+					</Anchor>
+					<Anchor point="BOTTOMRIGHT" relativePoint="BOTTOMRIGHT" relativeTo="LCDC_VendorSearch">
+						<Offset>
+							<AbsDimension x="-40" y="20" />
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<ScrollChild>
+					<EditBox name="$parentEdit" enableMouse="true" autofocus="false" multiLine="true">
+						<Anchor point="TOPLEFT" relativePoint="TOPLEFT" relativeTo="LCDC_ResultListScroll">
+							<Offset>
+								<AbsDimension x="2" y="-2" />
+							</Offset>
+						</Anchor>
+						<Anchor point="BOTTOMRIGHT" relativePoint="BOTTOMRIGHT" relativeTo="LCDC_ResultListScroll">
+							<Offset>
+								<AbsDimension x="-2" y="2" />
+							</Offset>
+						</Anchor>
+						<Layers>
+							<Layer level="ARTWORK"><Texture><Color r="0.0" g="0.0" b="0.0" a="0.2"/></Texture></Layer>
+						</Layers>
+						<Scripts>
+							<OnUpdate>ScrollingEdit_OnUpdate(this,null);</OnUpdate>
+							<OnTextChanged>ScrollingEdit_OnTextChanged(this,null);</OnTextChanged>
+							<OnCursorChanged>ScrollingEdit_OnCursorChanged(this,arg1,arg2,arg3,arg4);</OnCursorChanged>
+							<OnEscapePressed>
+								--DuckieBank_BankerTextEscape();
+							</OnEscapePressed>
+						</Scripts>
+						<FontString inherits="GameFontHighlight"><Color r="1" g="1" b="0.3" /></FontString>
+					</EditBox>
+				</ScrollChild>
+			</ScrollFrame>
+		</Frames>
+
+		<Layers>
+			<Layer level="ARTWORK">
+				<FontString inherits="GameFontHighlight" text="Vendor-search">
+					<Anchors>
+						<Anchor point="TOP" relativeTo="$parent" relativePoint="TOP"><Offset><AbsDimension x="-10" y="-6"/></Offset></Anchor>
+					</Anchors>
+				</FontString>
+				<FontString inherits="GameFontHighlight" text="Find:">
+					<Anchors>
+						<Anchor point="TOPRIGHT" relativeTo="$parent" relativePoint="TOPLEFT">
+							<Offset><AbsDimension x="70" y="-35"/></Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
+	</Frame>
+</Ui>

@@ -1,0 +1,16 @@
+## Interface: 30300
+## Title: LootCount |cFF9900FFDrop-rate|r
+## Notes: LootCount Drop-rate counter
+## DefaultState: Enabled
+## LoadOnDemand: 0
+## Author: Evil Duck
+## SavedVariables: LootCount_DropCount_DB,LootCount_DropCount_NoQuest
+## SavedVariablesPerCharacter: LootCount_DropCount_Character
+## OptionalDeps: LootCount
+##
+
+
+Astrolabe\Load.xml
+DuckMod.lua
+localization.en.lua
+LootCount_DropCount.xml

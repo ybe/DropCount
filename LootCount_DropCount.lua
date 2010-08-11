@@ -67,7 +67,7 @@ LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v0.76";
 LOOTCOUNT_DROPCOUNT = "DropCount";
 SLASH_DROPCOUNT1 = "/dropcount";
 SLASH_DROPCOUNT2 = "/lcdc";
-local DuckLib=DuckMod[2.0001];
+local DuckLib=DuckMod[2.02];
 
 
 --local DropCount={

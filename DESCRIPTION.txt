@@ -15,9 +15,9 @@ Colour coding
 In the list of mobs that drops the item, the mobs are colour-coded from red to green. A red mob-name is a mob that you have not killed many of, and the reported drop-rate may be inaccurate. The more mobs you kill, the greener the name gets - and the reported drop-rate will be a lot more accurate.
 
 The data
-Drop-Count for LootCount does not come with a pre-built database, so When you first install it, it is empty. Start killing mobs, and it will provide information for you quite fast.
+Drop-Count for LootCount does not come with a pre-built database, so when you first install it, it is empty. Start killing mobs, and it will provide information for you quite fast.
 
 Special items
 Normal items are counted on a per-kill basis.
 Skinning-drops are counted on a per-skinned basis.
-Quest-items are not counted, as the will require you to be on a quest for it to drop. These items will however show up as "Quest" in stead of a percentage.
+Quest-items are not counted, as they will require you to be on a quest for it to drop. These items will however show up as "Quest" in stead of a percentage.

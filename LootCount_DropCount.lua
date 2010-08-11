@@ -10,7 +10,10 @@
 	****************************************************************]]
 
 --      separated instance and world drop areas, changed quest faction
---      to player faction
+--      to player faction, less memory-intentsive at DB.Write, time-sliced
+--      removal of mobs from item drop-list, tuned cpu-load at merge a
+--      bit more, fixed bug in quest-convert (seven) that could lose
+--      area-names
 -- 0.76 added lower limit for merge throttle, added check for duplicate
 --      q-givers in multiple factions, remove zero-items from vendors
 --      when visiting them, moblist on <alt> + mouseover is now sorted
@@ -132,6 +135,10 @@ DropCount={
 		},
 		MobList={
 			button=nil,
+		},
+		ClearMobDrop={
+			amount=1000;
+			Done={ [1]={}, [2]={}, [3]={}, [4]={}, [5]={}, [6]={}, [7]={}, [8]={}, [9]={}, [10]={}, },
 		},
 	},
 	Cache={
@@ -1497,7 +1504,7 @@ end
 
 function DropCount.DB.Quest:Write(faction,npc,nData)
 	if (not self.Fast[faction]) then self.Fast[faction]={}; end
-	self.Fast[faction][npc]=DuckLib:CopyTable(nData);
+	self.Fast[faction][npc]=DuckLib:CopyTable(nData,self.Fast[faction][npc]);
 	local compact=nData.X..CONST.SEP1..nData.Y..CONST.SEP1..nData.Zone..CONST.SEP1;
 	local index=1;
 	while(nData.Quests[index]) do
@@ -1565,7 +1572,7 @@ function DropCount.DB.Vendor:Read(npc,base)
 end
 
 function DropCount.DB.Vendor:Write(npc,nData)
-	self.Fast[npc]=DuckLib:CopyTable(nData);
+	self.Fast[npc]=DuckLib:CopyTable(nData,self.Fast[npc]);
 	if (not nData.Faction) then nData.Faction=" "; end
 	local compact=nData.X..CONST.SEP1..nData.Y..CONST.SEP1..nData.Zone..CONST.SEP1..nData.Faction..CONST.SEP1;
 	if (nData.Repair) then compact=compact.."Y"; else compact=compact.."N"; end
@@ -1590,7 +1597,7 @@ function DropCount.DB.Count:Write(mob,nData)
 		LootCount_DropCount_DB.Count[mob]=nil;
 		return;
 	end
-	self.Fast[mob]=DuckLib:CopyTable(nData);
+	self.Fast[mob]=DuckLib:CopyTable(nData,self.Fast[mob]);
 	if (not nData.Kill) then nData.Kill=0; end
 	if (not nData.Skinning) then nData.Skinning=0; end
 	if (not nData.Zone) then nData.Zone=" "; end
@@ -1634,7 +1641,7 @@ function DropCount.DB.Count:Read(mob,base)
 end
 
 function DropCount.DB.Item:Write(item,iData)
-	self.Fast[item]=DuckLib:CopyTable(iData);
+	self.Fast[item]=DuckLib:CopyTable(iData,self.Fast[item]);
 	if (not iData.Time) then iData.Time=time(); end
 	if (not iData.Item) then iData.Item="<Unknown Item>"; end
 	local compact=iData.Item..CONST.SEP1..iData.Time..CONST.SEP1;
@@ -1752,13 +1759,19 @@ function DropCount.Convert:Seven()
 			end
 		end
 		for npc,nData in pairs(LootCount_DropCount_DB.Quest.Neutral) do
-			LootCount_DropCount_DB.Quest[f1][npc]=nData;
-			LootCount_DropCount_DB.Quest[f2][npc]=nData;
+			if (not LootCount_DropCount_DB.Quest[f1][npc]) then
+				LootCount_DropCount_DB.Quest[f1][npc]=nData;
+			end
+			if (not LootCount_DropCount_DB.Quest[f2][npc]) then
+				LootCount_DropCount_DB.Quest[f2][npc]=nData;
+			end
 		end
 		LootCount_DropCount_DB.Quest.Neutral=nil;
+	end
+	if (LootCount_DropCount_DB.Converted==6) then
+		LootCount_DropCount_DB.Converted=7;
 		collectgarbage("collect");
 	end
-	if (LootCount_DropCount_DB.Converted==6) then LootCount_DropCount_DB.Converted=7; end
 end
 
 function DropCount.Convert:Six()
@@ -3147,7 +3160,7 @@ function DropCountXML:OnUpdate(elapsed)
 	if (not DropCount.Loaded) then return; end
 
 	DropCount.Update=DropCount.Update+elapsed;
-	if (DropCount.Update<(1/20)) then return; end
+--	if (DropCount.Update<(1/20)) then return; end
 	DropCount.Update=0;
 	DropCount.Loaded=DropCount.Loaded+elapsed;
 
@@ -3173,6 +3186,7 @@ function DropCountXML:OnUpdate(elapsed)
 	DropCount.OnUpdate:RunQuestScan(elapsed);
 	DropCount.OnUpdate:WalkOldQuests(elapsed);
 	DropCount.OnUpdate:RunConvertAndMerge(elapsed);
+	DropCount.OnUpdate:RunClearMobListMT(elapsed);
 
 	if (DropCount.SpoolQuests) then
 		DropCount:WalkQuests();
@@ -3199,6 +3213,19 @@ function DropCountXML:OnUpdate(elapsed)
 		DropCount.Registered=true;
 		DuckLib:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_GREEN.."LootCount detected. DropCount is available from the LootCount menu.");
 	end
+end
+
+function DropCount.OnUpdate:RunClearMobListMT(elapsed)
+	if (not DropCount.Tracker.ClearMobDrop.item) then return; end
+	if (elapsed>(1/20)) then
+		DropCount.Tracker.ClearMobDrop.amount=DropCount.Tracker.ClearMobDrop.amount/2;
+	elseif (elapsed<(1/25)) then
+		DropCount.Tracker.ClearMobDrop.amount=DropCount.Tracker.ClearMobDrop.amount*1.2;
+	end
+	if (DropCount.Tracker.ClearMobDrop.amount<100) then
+		DropCount.Tracker.ClearMobDrop.amount=100;
+	end
+	DropCount:ClearMobDropMT(DropCount.Tracker.ClearMobDrop.amount);
 end
 
 function DropCount.OnUpdate:RunMobList()
@@ -3438,16 +3465,16 @@ function DropCount.OnUpdate:RunConvertAndMerge(elapsed)
 			elseif (LootCount_DropCount_DB.Converted==6) then
 				DropCount.Convert:Seven(); return;
 			end
-			if (LootCount_DropCount_MergeData) then
+			if (LootCount_DropCount_MergeData and not DropCount.Tracker.ClearMobDrop.item) then
 				DropCount.Tracker.Merge.FPS.Frames=DropCount.Tracker.Merge.FPS.Frames+1;
 				DropCount.Tracker.Merge.FPS.Time=DropCount.Tracker.Merge.FPS.Time+elapsed;
-				if (DropCount.Tracker.Merge.FPS.Time>=1) then
-					DropCount.Tracker.Merge.FPS.Time=DropCount.Tracker.Merge.FPS.Time-1;
+				if (DropCount.Tracker.Merge.FPS.Time>=CONST.BURSTSIZE) then
+					DropCount.Tracker.Merge.FPS.Time=DropCount.Tracker.Merge.FPS.Time-CONST.BURSTSIZE;
 					if (DropCount.Tracker.Merge.FPS.Frames>(30*CONST.BURSTSIZE)) then
-						DropCount.Tracker.Merge.Burst=DropCount.Tracker.Merge.Burst*1.2;
+						DropCount.Tracker.Merge.Burst=DropCount.Tracker.Merge.Burst*1.05;
 					elseif (DropCount.Tracker.Merge.FPS.Frames<(20*CONST.BURSTSIZE)) then
 						DropCount.Tracker.Merge.Burst=DropCount.Tracker.Merge.Burst/2;
-						if (DropCount.Tracker.Merge.Burst<1/(20*CONST.BURSTSIZE)) then DropCount.Tracker.Merge.Burst=1/(20*CONST.BURSTSIZE); end
+						if (DropCount.Tracker.Merge.Burst<CONST.BURSTSIZE/20) then DropCount.Tracker.Merge.Burst=CONST.BURSTSIZE/20; end
 					end
 					-- This looks a bit weird, but it will in effect leave a portion
 					-- of the last frame to make better use of the average.
@@ -3455,7 +3482,7 @@ function DropCount.OnUpdate:RunConvertAndMerge(elapsed)
 				end
 
 				DropCount.Tracker.Merge.BurstFlow=DropCount.Tracker.Merge.BurstFlow+DropCount.Tracker.Merge.Burst;
-				if (DropCount.Tracker.Merge.BurstFlow>=CONST.BURSTSIZE) then
+				if (DropCount.Tracker.Merge.BurstFlow>=1) then
 					if (DropCount:MergeDatabase()) then
 						LootCount_DropCount_MergeData=nil;
 						collectgarbage("collect");
@@ -3595,6 +3622,23 @@ function DropCount:RemoveFromItem(section,npc)
 	end
 end
 
+function DropCount:MergeStatus(amount)
+	if (not amount) then amount=1; end
+	DropCount.Tracker.Merge.Total=DropCount.Tracker.Merge.Total+amount;
+	local pc=math.floor((DropCount.Tracker.Merge.Total/DropCount.Tracker.Merge.Goal)*100);
+	if (pc>DropCount.Tracker.Merge.Printed and pc==math.floor(pc/10)*10) then
+		DropCount.Tracker.Merge.Printed=pc;
+		if (DropCount.Debug) then
+			local tex="Merged: "..pc.."%";
+			tex=tex..string.format(" (%.2f)",DropCount.Tracker.Merge.Burst);
+			DuckLib:Chat(tex,1,.6,.6);
+		end
+	end
+	DropCount.Tracker.Merge.BurstFlow=DropCount.Tracker.Merge.BurstFlow-amount;
+	if (DropCount.Tracker.Merge.BurstFlow<=0) then return nil; end
+	return true;
+end
+
 function DropCount:MergeDatabase()
 	if (not LootCount_DropCount_MergeData) then return true; end
 	if (not LootCount_DropCount_DB.MergedData) then LootCount_DropCount_DB.MergedData=0; end
@@ -3614,11 +3658,13 @@ function DropCount:MergeDatabase()
 			for _,_ in pairs(qT) do DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1; end
 		end
 		if (DropCount.Tracker.Merge.Goal>0) then
-			DuckLib:Chat(LOOTCOUNT_DROPCOUNT_VERSIONTEXT,1,.3,.3);
-			DuckLib:Chat("There are "..DropCount.Tracker.Merge.Goal.." entries to merge with your database.",1,.6,.6);
-			DuckLib:Chat("A summary will be presented when the process is done.",1,.6,.6);
-			DuckLib:Chat("This will take a few minutes, depending on the speed of your computer.",1,.6,.6);
-			DuckLib:Chat("You can play WoW while this is running is the background, even thought you may experience some lag.",1,.6,.6);
+			if (DropCount.Debug) then
+				DuckLib:Chat(LOOTCOUNT_DROPCOUNT_VERSIONTEXT,1,.3,.3);
+				DuckLib:Chat("There are "..DropCount.Tracker.Merge.Goal.." entries to merge with your database.",1,.6,.6);
+				DuckLib:Chat("A summary will be presented when the process is done.",1,.6,.6);
+				DuckLib:Chat("This will take a few minutes, depending on the speed of your computer.",1,.6,.6);
+				DuckLib:Chat("You can play WoW while this is running is the background, even thought you may experience some lag.",1,.6,.6);
+			end
 		end
 	end
 
@@ -3677,16 +3723,7 @@ function DropCount:MergeDatabase()
 				end
 			end
 			LootCount_DropCount_MergeData.Vendor[vend]=nil;	-- Done this vendor
-			DropCount.Tracker.Merge.Total=DropCount.Tracker.Merge.Total+1;
-			local pc=math.floor((DropCount.Tracker.Merge.Total/DropCount.Tracker.Merge.Goal)*100);
-			if (pc>DropCount.Tracker.Merge.Printed and pc==math.floor(pc/10)*10) then
-				DropCount.Tracker.Merge.Printed=pc;
-				local tex="Merged: "..pc.."%";
-				if (DropCount.Debug) then tex=tex..string.format(" (%.2f)",DropCount.Tracker.Merge.Burst); end
-				DuckLib:Chat(tex,1,.6,.6);
-			end
-			DropCount.Tracker.Merge.BurstFlow=DropCount.Tracker.Merge.BurstFlow-CONST.BURSTSIZE;
-			if (DropCount.Tracker.Merge.BurstFlow<=0) then return; end
+			if (not DropCount:MergeStatus()) then return; end
 		end
 	end
 
@@ -3709,16 +3746,7 @@ function DropCount:MergeDatabase()
 			if (newB) then DropCount.Tracker.Merge.Book.New=DropCount.Tracker.Merge.Book.New+1; end
 			if (updB) then DropCount.Tracker.Merge.Book.Updated=DropCount.Tracker.Merge.Book.Updated+1; end
 			LootCount_DropCount_MergeData.Book[title]=nil;	-- Done this volume
-			DropCount.Tracker.Merge.Total=DropCount.Tracker.Merge.Total+1;
-			local pc=math.floor((DropCount.Tracker.Merge.Total/DropCount.Tracker.Merge.Goal)*100);
-			if (pc>DropCount.Tracker.Merge.Printed and pc==math.floor(pc/10)*10) then
-				DropCount.Tracker.Merge.Printed=pc;
-				local tex="Merged: "..pc.."%";
-				if (DropCount.Debug) then tex=tex..string.format(" (%.2f)",DropCount.Tracker.Merge.Burst); end
-				DuckLib:Chat(tex,1,.6,.6);
-			end
-			DropCount.Tracker.Merge.BurstFlow=DropCount.Tracker.Merge.BurstFlow-CONST.BURSTSIZE;
-			if (DropCount.Tracker.Merge.BurstFlow<=0) then return; end
+			if (not DropCount:MergeStatus()) then return; end
 		end
 	end
 
@@ -3779,16 +3807,7 @@ function DropCount:MergeDatabase()
 						end
 					end
 					LootCount_DropCount_MergeData.Quest[faction][npc]=nil;
-					DropCount.Tracker.Merge.Total=DropCount.Tracker.Merge.Total+1;
-					local pc=math.floor((DropCount.Tracker.Merge.Total/DropCount.Tracker.Merge.Goal)*100);
-					if (pc>DropCount.Tracker.Merge.Printed and pc==math.floor(pc/10)*10) then
-						DropCount.Tracker.Merge.Printed=pc;
-						local tex="Merged: "..pc.."%";
-						if (DropCount.Debug) then tex=tex..string.format(" (%.2f)",DropCount.Tracker.Merge.Burst); end
-						DuckLib:Chat(tex,1,.6,.6);
-					end
-					DropCount.Tracker.Merge.BurstFlow=DropCount.Tracker.Merge.BurstFlow-CONST.BURSTSIZE;
-					if (DropCount.Tracker.Merge.BurstFlow<=0) then return; end
+					if (not DropCount:MergeStatus()) then return; end
 				end
 			end
 		end
@@ -3806,19 +3825,11 @@ function DropCount:MergeDatabase()
 		if (not LootCount_DropCount_DB.Item) then LootCount_DropCount_DB.Item={}; end
 		for mob,mTable in pairs(LootCount_DropCount_MergeData.Count) do
 			local newMob,updatedMob=DropCount:MergeMOB(mob,strict);
+			if (newMob<0) then return; end
 			DropCount.Tracker.Merge.Mob.New=DropCount.Tracker.Merge.Mob.New+newMob;
 			DropCount.Tracker.Merge.Mob.Updated=DropCount.Tracker.Merge.Mob.Updated+updatedMob;
 			LootCount_DropCount_MergeData.Count[mob]=nil;
-			DropCount.Tracker.Merge.Total=DropCount.Tracker.Merge.Total+1;
-			local pc=math.floor((DropCount.Tracker.Merge.Total/DropCount.Tracker.Merge.Goal)*100);
-			if (pc>DropCount.Tracker.Merge.Printed and pc==math.floor(pc/10)*10) then
-				DropCount.Tracker.Merge.Printed=pc;
-				local tex="Merged: "..pc.."%";
-				if (DropCount.Debug) then tex=tex..string.format(" (%.2f)",DropCount.Tracker.Merge.Burst); end
-				DuckLib:Chat(tex,1,.6,.6);
-			end
-			DropCount.Tracker.Merge.BurstFlow=DropCount.Tracker.Merge.BurstFlow-CONST.BURSTSIZE;
-			if (DropCount.Tracker.Merge.BurstFlow<=0) then return; end
+			if (not DropCount:MergeStatus()) then return; end
 		end
 	end
 
@@ -3863,16 +3874,7 @@ function DropCount:MergeDatabase()
 				end
 			end
 			LootCount_DropCount_MergeData.Item[item]=nil;
-			DropCount.Tracker.Merge.Total=DropCount.Tracker.Merge.Total+1;
-			local pc=math.floor((DropCount.Tracker.Merge.Total/DropCount.Tracker.Merge.Goal)*100);
-			if (pc>DropCount.Tracker.Merge.Printed and pc==math.floor(pc/10)*10) then
-				DropCount.Tracker.Merge.Printed=pc;
-				local tex="Merged: "..pc.."%";
-				if (DropCount.Debug) then tex=tex..string.format(" (%.2f)",DropCount.Tracker.Merge.Burst); end
-				DuckLib:Chat(tex,1,.6,.6);
-			end
-			DropCount.Tracker.Merge.BurstFlow=DropCount.Tracker.Merge.BurstFlow-CONST.BURSTSIZE;
-			if (DropCount.Tracker.Merge.BurstFlow<=0) then return; end
+			if (not DropCount:MergeStatus()) then return; end
 		end
 	end
 
@@ -3924,15 +3926,67 @@ end
 
 function DropCount:ClearMobDrop(mob,section)
 	for item,iRaw in pairs(LootCount_DropCount_DB.Item) do
-		if (DropCount.DB:PreCheck(iRaw,mob)) then
-			local iTable=DropCount.DB.Item:Read(item);
-			if (iTable[section] and iTable[section][mob]) then
-				iTable[section][mob]=nil;
-				DropCount.DB.Item:Write(item,iTable);
-			end
+		self:RemoveMobFromItem(item,iRaw,mob,section);
+	end
+end
+
+-- The call next(t, k), where k is a key of the table t, returns a next
+-- key in the table, in an arbitrary order. (It returns also the value
+-- associated with that key, as a second return value.)
+-- The call next(t, nil) returns a first pair. When there are no more
+-- pairs, next returns nil.
+function DropCount:ClearMobDropMT(amount,mob,section)
+	local init=nil;
+	if (not DropCount.Tracker.ClearMobDrop.item) then
+		DropCount.Tracker.ClearMobDrop.mob=mob;
+		DropCount.Tracker.ClearMobDrop.section=section;
+		init=true;
+	end
+	local count=0;
+	while (count<amount and (DropCount.Tracker.ClearMobDrop.item or init)) do
+		init=nil;
+		local iRaw;
+		DropCount.Tracker.ClearMobDrop.item,iRaw=
+				next(LootCount_DropCount_DB.Item,DropCount.Tracker.ClearMobDrop.item);
+		if (DropCount.Tracker.ClearMobDrop.item) then
+			DropCount:RemoveMobFromItem(	DropCount.Tracker.ClearMobDrop.item,
+											iRaw,
+											DropCount.Tracker.ClearMobDrop.mob,
+											DropCount.Tracker.ClearMobDrop.section);
+		end
+		count=count+1;
+	end
+
+	if (not DropCount.Tracker.ClearMobDrop.item) then
+		local i=10;
+		while (i>1) do
+			DropCount.Tracker.ClearMobDrop.Done[i].mob=DropCount.Tracker.ClearMobDrop.Done[i-1].mob;
+			DropCount.Tracker.ClearMobDrop.Done[i].section=DropCount.Tracker.ClearMobDrop.Done[i-1].section;
+			i=i-1;
+		end
+		DropCount.Tracker.ClearMobDrop.Done[1].mob=DropCount.Tracker.ClearMobDrop.mob;
+		DropCount.Tracker.ClearMobDrop.Done[1].section=DropCount.Tracker.ClearMobDrop.section;
+	end
+end
+
+function DropCount:RemoveMobFromItem(item,iRaw,mob,section)
+	if (DropCount.DB:PreCheck(iRaw,mob)) then
+		local iTable=DropCount.DB.Item:Read(item);
+		if (iTable[section] and iTable[section][mob]) then
+			iTable[section][mob]=nil;
+			DropCount.DB.Item:Write(item,iTable);
 		end
 	end
 end
+
+
+function DropCount:IsMobDropCleared(mob,section)
+	for _,mData in pairs(DropCount.Tracker.ClearMobDrop.Done) do
+		if (mData.mob and mData.mob==mob and mData.section==section) then return true; end
+	end
+	return nil;
+end
+
 
 -- Check mobs and insert anything that is missing
 -- IMPORTANT: Do not merge counts! Only insert missing!
@@ -3960,7 +4014,10 @@ function DropCount:MergeMOB(mob,strict)
 		end
 		tester=cData.Kill; if (strict) then tester=tester-1; end
 		if (mData.Kill>tester) then
-			DropCount:ClearMobDrop(mob,"Name");	-- New (and higher) count, so remove old drops
+			if (not self:IsMobDropCleared(mob,"Name")) then
+				self:ClearMobDropMT(DropCount.Tracker.ClearMobDrop.amount,mob,"Name");	-- New (and higher) count, so remove old drops
+				return -1;
+			end
 			kill=mData.Kill;
 			cData.Kill=kill;
 			if (newMob==0) then updatedMob=1; end
@@ -3973,7 +4030,10 @@ function DropCount:MergeMOB(mob,strict)
 		end
 		tester=cData.Skinning; if (strict) then tester=tester-1; end
 		if (mData.Skinning>tester) then
-			DropCount:ClearMobDrop(mob,"Skinning");
+			if (not self:IsMobDropCleared(mob,"Skinning")) then
+				self:ClearMobDropMT(DropCount.Tracker.ClearMobDrop.amount,mob,"Skinning");
+				return -1;
+			end
 			skinning=mData.Skinning;
 			cData.Skinning=skinning;
 			if (newMob==0) then updatedMob=1; end
@@ -4046,9 +4106,7 @@ function DropCount:MergeMOB(mob,strict)
 		end
 	end
 
-	if (not cData.Kill and not cData.Skinning) then
-		cData=nil;
-	end
+	if (not cData.Kill and not cData.Skinning) then cData=nil; end
 	DropCount.DB.Count:Write(mob,cData);
 
 	return newMob,updatedMob;

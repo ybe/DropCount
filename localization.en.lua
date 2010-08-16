@@ -16224,7 +16224,7 @@ LootCount_DropCount_MergeData = {
 
 LootCount_DropCount_RemoveData = {
 	["Quest"] = {
-		["Neutral"] = {
+		["Horde"] = {
 			["Webwood Venomfang"] = {},
 			["- item -"] = {},
 			["Pygmy Tide Crawler"] = {},
@@ -16268,6 +16268,7 @@ LootCount_DropCount_RemoveData = {
 			},
 		},
 		["Alliance"] = {
+			["Leprous Servant"] = {},
 			["Serinar"] = {},
 			["Morg Gnarltree"] = {},
 			["Auctioneer Jaxon"] =  {},
@@ -16296,6 +16297,47 @@ LootCount_DropCount_RemoveData = {
 				},
 			},
 			["Isla Starmane"] =  {},
+			["Webwood Venomfang"] = {},
+			["- item -"] = {},
+			["Pygmy Tide Crawler"] = {},
+			["Darkshore Thresher"] = {},
+			["- item (51,24) -"] = {},
+			["- item - (Borean Tundra 59,30)"] = {},
+			["Librarian Whitley"] = {
+				["Quests"] = {
+					{
+						["Quest"] = "Puzzling...",
+					}, -- [1]
+				},
+			},
+			["Tree Warden Chawn"] = {
+				["Quests"] = {
+					{
+						["Quest"] = "Did You Get The Note?",
+					}, -- [1]
+				},
+			},
+			["Apprentice Andrethan"] = {
+				["Quests"] = {
+					{
+						["Quest"] = "Cohlien Frostweaver",
+					}, -- [1]
+				},
+			},
+			["- item - (Borean Tundra - Farshire Mine 56,55)"] = {
+				["Quests"] = {
+					{
+						["Quest"] = "The Late William Allerton",
+					}, -- [1]
+				},
+			},
+			["- item - (Borean Tundra - Farshire Mine 55,55)"] = {
+				["Quests"] = {
+					{
+						["Quest"] = "Pernicious Evidence",
+					}, -- [1]
+				},
+			},
 		},
 	},
 

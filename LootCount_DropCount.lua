@@ -13,7 +13,8 @@
 --      to player faction, less memory-intentsive at DB.Write, time-sliced
 --      removal of mobs from item drop-list, tuned cpu-load at merge a
 --      bit more, fixed bug in quest-convert (seven) that could lose
---      area-names
+--      area-names, minor sorting in NPC quests, fixed a bug in item
+--      search, added search for area by item
 -- 0.76 added lower limit for merge throttle, added check for duplicate
 --      q-givers in multiple factions, remove zero-items from vendors
 --      when visiting them, moblist on <alt> + mouseover is now sorted
@@ -56,6 +57,7 @@
 -- + Change quest faction to player's own faction
 -- + Remember merge with neutral quests for the v7 non-neutral DB
 -- + Merge the new dual best area
+-- - Filtering of quest display
 
 
 -- CHECK:
@@ -70,8 +72,8 @@ SLASH_DROPCOUNT2 = "/lcdc";
 local DuckLib=DuckMod[2.02];
 
 
---local DropCount={
-DropCount={
+--DropCount={
+local DropCount={
 	Loaded=nil,
 	Debug=nil,
 	Registered=nil,
@@ -148,6 +150,7 @@ DropCount={
 	},
 	Search={
 		Item=nil,
+		mobItem=nil,
 	},
 	Timer={
 		VendorDelay=-1,
@@ -448,6 +451,30 @@ function DropCountXML.Slasher(msg)
 			DropCount.Cache:AddItem(DropCount.Search.Item);
 		end
 		return;
+	elseif (msg:find("area",1,true)==1) then
+		msg=msg:sub(5);
+		msg=strtrim(msg);
+		DropCount.Search.mobItem=msg;
+		local number=tonumber(DropCount.Search.mobItem);
+		number=tostring(number);
+		if (DropCount.Search.mobItem==number) then
+			DropCount.Search.mobItem="item:"..DropCount.Search.mobItem..":0:0:0:0:0:0";
+		end
+		if (GetItemInfo(DropCount.Search.mobItem)) then			-- Fastest check
+			DropCount:AreaForItem();
+		else
+			if (not DropCount.Search.mobItem:find("item:",1,true)) then	-- Not ID, not link, assume name
+				DropCount.Search.mobItem=DropCount:ItemByName(DropCount.Search.mobItem);
+				if (not DropCount.Search.mobItem) then				-- Can't find by name
+					DuckLib:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_RED.."Information not available for this item. A link or itemID is required.");
+					DropCount.Search.mobItem=nil;
+					return;
+				end
+			end
+			DuckLib:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_LBLUE.."Getting item information...");
+			DropCount.Cache:AddItem(DropCount.Search.mobItem);
+		end
+		return;
 	elseif (string.find(msg,"book",1,true)==1) then
 		msg=string.sub(msg,5);
 		msg=strtrim(msg);
@@ -462,6 +489,12 @@ function DropCountXML.Slasher(msg)
 		return;
 	elseif (msg=="stats") then
 		DropCount:ShowStats();
+		return;
+	elseif (msg=="health") then
+		DropCount:ShowDBHealth();
+		return;
+	elseif (msg=="health loc") then
+		DropCount:ShowDBHealth(true);
 		return;
 	elseif (msg=="single") then
 		DropCount:ToggleSingleDrop();
@@ -682,7 +715,7 @@ function DropCount.Event.QUEST_DETAIL()
 	local qName=GetTitleText();
 	local target=DropCount:GetTargetType();
 	if (target) then
-		target=CheckInteractDistance(DropCount:GetTargetType(),2);	-- Trade-distance
+		target=CheckInteractDistance(DropCount:GetTargetType(),3);	-- Duel - 9,9 yards
 	end
 	if (not target) then		-- No target, or too far away
 		DropCount.Target.CurrentAliveFriendClose=nil;
@@ -772,32 +805,56 @@ end
 function DropCount.Hook.SetBagItem(self,bag,slot)
 	local hasCooldown,repairCost=DropCount.Hook.TT_SetBagItem(self,bag,slot);
 
-	if (not LootCount_DropCount_Character.NoTooltip) then
-		local _,ThisItem=GameTooltip:GetItem();
-		if (ThisItem) then
-			ThisItem=DuckLib:GetID(ThisItem);
-			local iData=DropCount.DB.Item:Read(ThisItem);
-			if (iData) then
-				local text="|cFFF89090B|cFFF09098e|cFFE890A0s|cFFE090A8t |cFFD890B0k|cFFD090B8n|cFFC890C0o|cFFC090C8w|cFFB890D0n |cFFB090D8a|cFFA890E0r|cFFA090E8e|cFF9890F0a: |cFF9090F8";
-				if (iData.BestW) then
-					GameTooltip:AddLine(text..iData.BestW.Location.." at "..iData.BestW.Score.."%",.6,.6,1,1);	-- 1=wrap text
-				elseif (iData.Best) then
-					GameTooltip:AddLine(text..iData.Best.Location.." at "..iData.Best.Score.."%",.6,.6,1,1);	-- 1=wrap text
-				end
-			end
-			GameTooltip:Show();
-		end
-	end
-
+	local _,item=GameTooltip:GetItem();
+	DropCount.Hook:AddLocationData(GameTooltip,item);
 	return hasCooldown,repairCost;
 end
 
+function DropCount.Hook:AddLocationData(frame,item)
+	if (LootCount_DropCount_Character.NoTooltip) then return; end
+	local ThisItem=DuckLib:GetID(item);
+	if (ThisItem) then
+		local iData=DropCount.DB.Item:Read(ThisItem);
+		if (iData) then
+			local text="|cFFF89090B|cFFF09098e|cFFE890A0s|cFFE090A8t |cFFD890B0k|cFFD090B8n|cFFC890C0o|cFFC090C8w|cFFB890D0n |cFFB090D8a|cFFA890E0r|cFFA090E8e|cFF9890F0a: |cFF9090F8";
+			if (iData.BestW) then
+				frame:AddLine(text..iData.BestW.Location.." at "..iData.BestW.Score.."%",.6,.6,1,1);	-- 1=wrap text
+			elseif (iData.Best) then
+				frame:AddLine(text..iData.Best.Location.." at "..iData.Best.Score.."%",.6,.6,1,1);	-- 1=wrap text
+			end
+		end
+		frame:Show();
+	end
+end
 
 function DropCount:ToggleSingleDrop()
 	if (LootCount_DropCount_Character.ShowSingle) then
 		LootCount_DropCount_Character.ShowSingle=nil;
 	else
 		LootCount_DropCount_Character.ShowSingle=true;
+	end
+end
+
+function DropCount:ShowDBHealth(here)
+	-- Vendors with missing coords
+	local count=0;
+	for vendor,vData in pairs(LootCount_DropCount_DB.Vendor) do
+		local X,Y,Zone,Faction=DropCount.DB.Vendor:ReadBaseData(vendor);
+		if (X~=0 and Y~=0) then
+			if (not here or DropCount:GetFullZone():find(Zone)) then
+				if (count==0) then DuckLib:Chat("Vendors without coordinates:"); end
+				count=count+1;
+				local text=vendor;
+				if (Zone and Zone~=" ") then text=text.." in "..Zone; end
+				if (Faction and Faction~=" ") then text=text.." ("..Faction..")"; end
+				DuckLib:Chat(text);
+			end
+		end
+	end
+	if (count==0) then
+		DuckLib:Chat("All vendors accounted for");
+	else
+		DuckLib:Chat(count.." vendors found");
 	end
 end
 
@@ -995,9 +1052,14 @@ function DropCount:SaveQuest(qName,qGiver,qLevel)
 	if (type(qTable[qGiver].Quests[i])~="table") then qTable[qGiver].Quests[i]={}; end
 	qTable[qGiver].Quests[i].Quest=qName;
 
+	while (qTable[qGiver].Quests[i+1]) do							-- It's not the bottom quest
+		qTable[qGiver].Quests[i],qTable[qGiver].Quests[i+1]=qTable[qGiver].Quests[i+1],qTable[qGiver].Quests[i];
+		newquest=true;
+		i=i+1;
+	end
 	if (newquest) then
 		DropCount.DB.Quest:Write(CONST.MYFACTION,qGiver,qTable[qGiver]);
-		DuckLib:Chat(CONST.C_BASIC.."New Quest "..CONST.C_GREEN.."\""..qName.."\""..CONST.C_BASIC.." saved for "..CONST.C_GREEN..qGiver);
+		if (DropCount.Debug) then DuckLib:Chat(CONST.C_BASIC.."New Quest "..CONST.C_GREEN.."\""..qName.."\""..CONST.C_BASIC.." saved for "..CONST.C_GREEN..qGiver); end
 	end
 end
 
@@ -1017,7 +1079,7 @@ function DropCount:ScanQuests()
 			LootCount_DropCount_Character.Quests[questTitle]={
 				ID=tonumber(questID),
 				Header=lastheader,
-			}
+			};
 		else
 			lastheader=questTitle;
 		end
@@ -1916,6 +1978,29 @@ function DropCount:VendorsForItem()
 	end
 end
 
+function DropCount:AreaForItem()
+	if (not DropCount.Search.mobItem) then return; end
+	if (not LootCount_DropCount_DB.Item) then return; end
+
+	local itemName,itemLink=GetItemInfo(DropCount.Search.mobItem);
+	if (not itemLink) then return; end
+	local item=DuckLib:GetID(itemLink);
+	if (not LootCount_DropCount_DB.Item[item]) then
+		DuckLib:Chat(CONST.C_YELLOW.."Unknown drop: "..itemName.."|r");
+		return;
+	end
+	item=DropCount.DB.Item:Read(item);
+	if (not item.Best) then
+		DuckLib:Chat(CONST.C_YELLOW.."No known drop-area for "..itemName.."|r");
+		return;
+	end
+	DuckLib:Chat(itemLink);
+	DuckLib:Chat("Drops in "..item.Best.Location.." at "..item.Best.Score.."%");
+	if (item.BestW) then
+		DuckLib:Chat("and in "..item.BestW.Location.." at "..item.BestW.Score.."%");
+	end
+end
+
 function DropCount:ReadMerchant(dude)
 	local rebuildIcons=nil;
 	local numItems=GetMerchantNumItems();
@@ -2449,7 +2534,7 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down)
 		button={
 			FreeFloat=true;
 			User={
-				itemID=button;
+				itemID=button,
 			};
 		};
 	elseif (not button.User or not button.User.itemID) then
@@ -2479,11 +2564,9 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down)
 		else GameTooltip:AddDoubleLine("Profession","",1,0,1,1,0,1); end
 	end
 	if (iTable.Best) then
+		GameTooltip:AddDoubleLine("Best drop-area:",iTable.Best.Location.." ("..iTable.Best.Score..")",0,1,1,0,1,1);
 		if (iTable.BestW) then
-			GameTooltip:AddDoubleLine("Best drop-area:",iTable.BestW.Location.." ("..iTable.BestW.Score..")",0,1,1,0,1,1);
-			GameTooltip:AddDoubleLine("Including instances:",iTable.Best.Location.." ("..iTable.Best.Score..")",0,1,1,0,1,1);
-		else
-			GameTooltip:AddDoubleLine("Best drop-area:",iTable.Best.Location.." ("..iTable.Best.Score..")",0,1,1,0,1,1);
+			GameTooltip:AddDoubleLine(" ",iTable.BestW.Location.." ("..iTable.BestW.Score..")",0,1,1,0,1,1);
 		end
 	end
 
@@ -3038,21 +3121,6 @@ function DropCount:CleanDB()
 		text="DropCount memory usage: "..usage.." -> ";
 	end
 
---	-- Force items to neutral
---	if (LootCount_DropCount_DB.Quest) then
---		if (not LootCount_DropCount_DB.Quest.Neutral) then LootCount_DropCount_DB.Quest.Neutral={}; end
---		for faction,fTable in pairs(LootCount_DropCount_DB.Quest) do
---			if (faction~="Neutral") then
---				for npc,nTable in pairs(fTable) do
---					if (string.find(npc,"- item ",1,true)==1 and type(nTable)=="string") then
---						LootCount_DropCount_DB.Quest.Neutral[npc]=nTable;
---						LootCount_DropCount_DB.Quest[faction][npc]=nil;
---					end
---				end
---			end
---		end
---	end
-
 	-- List key-data
 	local nowitems,nowmobs;
 	if (LootCount_DropCount_DB.Book) then
@@ -3260,6 +3328,8 @@ function DropCount.OnUpdate:RunUnknownItems(elapsed)
 				DropCount.Tracker.UnknownItems[DropCount.Tracker.RequestedItem]=nil;
 				if (DropCount.Search.Item==DropCount.Tracker.RequestedItem) then
 					DropCount:VendorsForItem();
+				elseif (DropCount.Search.mobItem==DropCount.Tracker.RequestedItem) then
+					DropCount:AreaForItem();
 				end
 				DropCount.Tracker.RequestedItem=nil;
 				DropCount.Cache.Retries=0;
@@ -3277,10 +3347,14 @@ function DropCount.OnUpdate:RunUnknownItems(elapsed)
 		if (DropCount.Cache.Retries>=CONST.CACHEMAXRETRIES) then
 			if (DropCount.Search.Item==DropCount.Tracker.RequestedItem) then
 				DuckLib:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_RED.."Could not retrieve information for this item from the server.");
+				DropCount.Search.Item=nil;
+			elseif (DropCount.Search.mobItem==DropCount.Tracker.RequestedItem) then
+				DuckLib:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_RED.."Could not retrieve information for this item from the server.");
+				DropCount.Search.mobItem=nil;
 			end
 			DuckLib:Chat("Not retrievable: "..DropCount.Tracker.RequestedItem,1);
 			if (LootCount_DropCount_DB.Item and
-				LootCount_DropCount_DB.Item[DropCount.Tracker.RequestedItem]) then
+					LootCount_DropCount_DB.Item[DropCount.Tracker.RequestedItem]) then
 				local iTable=DropCount.DB.Item:Read(DropCount.Tracker.RequestedItem);
 				if (iTable.Item) then
 					DuckLib:Chat("\""..DropCount.Tracker.RequestedItem.."\" seem to be \""..iTable.Item.."\"",1);
@@ -3394,7 +3468,7 @@ function DropCount.OnUpdate:RunStartup(elapsed)
 		if (DropCount.Timer.StartupDelay<=0) then
 			DropCount.Timer.StartupDelay=nil;
 			Astrolabe:CalculateMinimapIconPositions();
-			DropCount:CleanDB();
+--			DropCount:CleanDB();
 			LCDC_RescanQuests=CONST.RESCANQUESTS;
 		end
 	end

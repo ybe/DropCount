@@ -484,7 +484,7 @@ function DropCountXML.Slasher(msg)
 			DropCount:ListBook(msg);
 		end
 		return;
-	elseif (msg=="show") then
+	elseif (msg=="gui") then
 		LCDC_VendorSearch:Show();
 		return;
 	elseif (msg=="stats") then
@@ -771,8 +771,11 @@ function DropCount.Event.QUEST_QUERY_COMPLETE()
 end
 
 -- An event has been received
-function DropCountXML:OnEvent(event)
-	if (DropCount.Event[event]) then DropCount.Event[event](); return; end
+function DropCountXML:OnEvent(event,...)
+	if (DropCount.Event[event]) then DropCount.Event[event](...); return; end
+	local frame,index=...;
+	frame=arg1;			-- until cataclysm
+	index=arg2;			-- until cataclysm
 
 	if (event=="ADDON_LOADED" and arg1=="LootCount_DropCount") then
 		DropCount.Hook.TT_SetBagItem=GameTooltip.SetBagItem; GameTooltip.SetBagItem=DropCount.Hook.SetBagItem;
@@ -799,6 +802,74 @@ function DropCountXML:OnEvent(event)
 		QueryQuestsCompleted();
 		DropCount.Loaded=0;
 		DropCount.Icons:Plot();
+		LCDC_ResultListScroll:DMClear();		-- Prep search-list
+		LCDC_VendorSearch_UseVendors:SetText("Vendors"); LCDC_VendorSearch_UseVendors:SetChecked(true);
+		LCDC_VendorSearch_UseQuests:SetText("Quests"); LCDC_VendorSearch_UseQuests:SetChecked(true);
+		LCDC_VendorSearch_UseBooks:SetText("Books"); LCDC_VendorSearch_UseBooks:SetChecked(true);
+		LCDC_VendorSearch_UseItems:SetText("Items"); LCDC_VendorSearch_UseItems:SetChecked(true);
+		LCDC_VendorSearch_UseMobs:SetText("Creatures"); LCDC_VendorSearch_UseMobs:SetChecked(true);
+	end
+	if (event=="DMEVENT_LISTBOX_ITEM_ENTER") then
+		local entry=frame.DMTheList[index];
+		if (entry.Tooltip) then
+			GameTooltip:SetOwner(frame,"ANCHOR_CURSOR");
+			GameTooltip:SetText(entry.Tooltip[1]);
+			local i=2;
+			while(entry.Tooltip[i]) do
+				GameTooltip:AddLine(entry.Tooltip[i],.6,.6,1,0);	-- 1=wrap text
+				i=i+1;
+			end
+
+			-- Vendor
+			local found=nil;
+			if (entry.DB.Section=="Vendor") then
+				local eData=DropCount.DB.Vendor:Read(nil,entry.DB.Data);
+				for _,iTable in pairs(eData.Items) do
+					if (iTable.Name) then
+						local test=iTable.Name; test=test:lower();
+						if (test:find(LCDC_VendorSearch.SearchTerm)) then
+							if (not found) then
+								found=true;
+								GameTooltip:AddLine(" ",1,1,1,0);
+								GameTooltip:AddLine("Matches:",1,1,1,0);
+							end
+							GameTooltip:AddLine("    "..iTable.Name,1,1,1,0);
+						end
+					end
+				end
+			elseif (entry.DB.Section=="Quest") then
+				local eData=DropCount.DB.Quest:Read(CONST.MYFACTION,entry.DB.Entry);
+				for _,iTable in ipairs(eData.Quests) do
+					local useit=nil;
+					local test=iTable.Quest; test=test:lower();
+					if (test:find(LCDC_VendorSearch.SearchTerm)) then useit=true; end
+					local test=iTable.Header; test=test:lower();
+					if (test:find(LCDC_VendorSearch.SearchTerm)) then useit=true; end
+					if (useit) then
+						if (not found) then
+							found=true;
+							GameTooltip:AddLine(" ",1,1,1,0);
+							GameTooltip:AddLine("Matches:",1,1,1,0);
+						end
+						GameTooltip:AddDoubleLine("     "..iTable.Quest,iTable.Header,1,1,1,1,1,1);
+					end
+				end
+			end
+			GameTooltip:Show();
+		elseif (entry.DB.Section=="Item") then
+			DropCount.Tooltip:MobList(entry.DB.Entry,nil,nil,nil,LCDC_VendorSearch.SearchTerm);
+		elseif (entry.DB.Section=="Creature") then
+			DropCount:SetLootlist(entry.DB.Entry,GameTooltip);
+		end
+	end
+	if (event=="DMEVENT_LISTBOX_ITEM_LEAVE") then
+		GameTooltip:Hide();
+	end
+	if (event=="DMEVENT_LISTBOX_ITEM_CLICKED") then
+
+--	entry.DB.Section="Vendor";
+--	entry.DB.Entry=vendor;
+--	entry.DB.Data=vData;
 	end
 end
 
@@ -1608,19 +1679,26 @@ function DropCount.DB.Vendor:Read(npc,base)
 		store=true;
 	end
 	if (not base) then return nil; end
-	if (not base[npc]) then return nil; end
+	local nData,codestring;
 
-	if (type(base[npc])=="table") then
-		return base[npc];
+	-- It can be a string of compressed data
+	if (type(base)=="table") then
+		if (not base[npc]) then return nil; end
+		if (type(base[npc])=="table") then
+			return base[npc];
+		end
+		codestring=base[npc];
+		if (store) then
+			if (self.Fast[npc]) then wipe(self.Fast[npc]); else self.Fast[npc]={}; end
+			nData=self.Fast[npc];
+		else nData={}; end
+	else
+		nData={};
+		codestring=base;
 	end
 
-	local nData;
-	if (store) then
-		if (self.Fast[npc]) then wipe(self.Fast[npc]); else self.Fast[npc]={}; end
-		nData=self.Fast[npc];
-	else nData={}; end
 	local items;
-	nData.X,nData.Y,nData.Zone,nData.Faction,nData.Repair,items=strsplit(CONST.SEP1,base[npc]);
+	nData.X,nData.Y,nData.Zone,nData.Faction,nData.Repair,items=strsplit(CONST.SEP1,codestring);
 	nData.X=tonumber(nData.X);
 	nData.Y=tonumber(nData.Y);
 	if (nData.Repair=="Y") then nData.Repair=true; else nData.Repair=nil; end
@@ -2431,6 +2509,7 @@ function DropCount.LootCount.IconClicked(button,LR,count)
 end
 
 function DropCount:GetRatioColour(ratio)
+	if (not ratio) then ratio=0; end
 	if (ratio>1) then ratio=1; elseif (ratio<0) then ratio=0; end
 	ratio=string.format("|cFF%02X%02X%02X",128+(ratio*127),128+(ratio*127),128+(ratio*127));		-- AARRGGBB
 	return ratio;
@@ -2528,7 +2607,21 @@ function DropCount.LootCount.Tooltip(button)
 	DropCount.Tooltip:MobList(button,true);
 end
 
-function DropCount.Tooltip:MobList(button,plugin,limit,down)
+function DropCount:Highlight(text,highlight,terminate)
+	if (not highlight) then return text; end
+	if (not terminate) then terminate="|r"; end
+	local test=text; test=test:lower();
+	highlight=highlight:lower();
+	local start,stop=test:find(highlight);
+	if (not start) then return text; end
+	local sf,sm,se="","","";
+	if (start>1) then sf=text:sub(1,start-1); end
+	sm=text:sub(start,stop);
+	se=text:sub(stop+1);
+	return sf.."|cFFFFFF00"..sm..terminate..se;
+end
+
+function DropCount.Tooltip:MobList(button,plugin,limit,down,highlight)
 --	if (not limit) then limit=0; end
 	if (type(button)=="string") then
 		button={
@@ -2549,7 +2642,7 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down)
 	local _,_,_,colour=GetItemQualityColor(rarity);
 	if (button.FreeFloat) then GameTooltip:SetOwner(UIParent,"ANCHOR_CURSOR");
 	else GameTooltip:SetOwner(button,"ANCHOR_RIGHT"); end
-	GameTooltip:SetText(colour.."["..itemname.."]|r:");
+	GameTooltip:SetText(colour.."["..DropCount:Highlight(itemname,highlight,colour).."]|r:");
 	local currentzone=GetRealZoneText();
 	if (not currentzone) then
 		currentzone="";
@@ -2564,9 +2657,9 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down)
 		else GameTooltip:AddDoubleLine("Profession","",1,0,1,1,0,1); end
 	end
 	if (iTable.Best) then
-		GameTooltip:AddDoubleLine("Best drop-area:",iTable.Best.Location.." ("..iTable.Best.Score..")",0,1,1,0,1,1);
+		GameTooltip:AddDoubleLine("Best drop-area:",DropCount:Highlight(iTable.Best.Location,highlight).." ("..iTable.Best.Score..")",0,1,1,0,1,1);
 		if (iTable.BestW) then
-			GameTooltip:AddDoubleLine(" ",iTable.BestW.Location.." ("..iTable.BestW.Score..")",0,1,1,0,1,1);
+			GameTooltip:AddDoubleLine(" ",DropCount:Highlight(iTable.BestW.Location,highlight).." ("..iTable.BestW.Score..")",0,1,1,0,1,1);
 		end
 	end
 
@@ -2612,10 +2705,10 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down)
 
 				local zone="";
 				if (LootCount_DropCount_Character.ShowZone and mTable.Zone) then
-					zone=" |cFF0060FF("..mTable.Zone..")";
+					zone=" |cFF0060FF("..DropCount:Highlight(mTable.Zone,highlight,"|cFF0060FF")..")";
 				end
 
-				list[line].Ltext=colour..pretext..mob..zone.."|r: ";
+				list[line].Ltext=colour..pretext..DropCount:Highlight(mob,highlight,colour)..zone.."|r: ";
 				list[line].Show=Show;
 				if (LootCount_DropCount_Character.ShowZoneMobs and mTable.Zone and currentzone and string.find(mTable.Zone,currentzone,1,true)~=1) then
 					list[line]=nil;
@@ -2663,10 +2756,10 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down)
 
 				local zone="";
 				if (LootCount_DropCount_Character.ShowZone and mTable.Zone) then
-					zone=" |cFF0060FF("..mTable.Zone..")";
+					zone=" |cFF0060FF("..DropCount:Highlight(mTable.Zone,highlight,"|cFF0060FF")..")";
 				end
 
-				list[line].Ltext=colour..pretext..mob..zone.."|r";
+				list[line].Ltext=colour..pretext..DropCount:Highlight(mob,highlight,colour)..zone.."|r";
 				if (normaldrop) then list[line].Ltext="|cFFFF00FF*|r "..list[line].Ltext; end
 				list[line].Show=Show;
 				if (LootCount_DropCount_Character.ShowZoneMobs and mTable.Zone and currentzone and string.find(mTable.Zone,currentzone,1,true)~=1) then
@@ -2934,19 +3027,20 @@ function DropCount.Tooltip:SetNPCContents(unit,parent)
 	LootCount_DropCount_TT:Show();
 end
 
-function DropCount:SetLootlist(unit)
+function DropCount:SetLootlist(unit,AltTT)
 	if (not LootCount_DropCount_DB.Count[unit]) then
 		DropCount.Tooltip:SetNPCContents(unit);
 		return;
 	end
 
-	LootCount_DropCount_TT:ClearLines();
-	LootCount_DropCount_TT:SetOwner(UIParent,"ANCHOR_CURSOR");
-	LootCount_DropCount_TT:SetText(unit);
+	if (not AltTT) then AltTT=LootCount_DropCount_TT; end
+	AltTT:ClearLines();
+	AltTT:SetOwner(UIParent,"ANCHOR_CURSOR");
+	AltTT:SetText(unit);
 	local text="";
 	local mTable=DropCount.DB.Count:Read(unit);
 	if (mTable.Skinning and mTable.Skinning>0) then text="Profession-loot: "..mTable.Skinning.." times"; end
-	LootCount_DropCount_TT:AddDoubleLine(mTable.Kill.." kills",text,.4,.4,1,1,0,1);
+	AltTT:AddDoubleLine(mTable.Kill.." kills",text,.4,.4,1,1,0,1);
 
 	local list={};
 	local line=1;
@@ -2999,22 +3093,22 @@ function DropCount:SetLootlist(unit)
 		end
 	end
 	if (missingitems>0) then
-		LootCount_DropCount_TT:AddDoubleLine("Missing "..missingitems.." items.","",1,0,0,0,0,0);
-		LootCount_DropCount_TT:AddDoubleLine("Loading...","",1,0,0,0,0,0);
-		LootCount_DropCount_TT:Show();
-		LootCount_DropCount_TT.Loading=true;
+		AltTT:AddDoubleLine("Missing "..missingitems.." items.","",1,0,0,0,0,0);
+		AltTT:AddDoubleLine("Loading...","",1,0,0,0,0,0);
+		AltTT:Show();
+		AltTT.Loading=true;
 		return;
 	end
-	LootCount_DropCount_TT.Loading=nil;
-	if (not itemsinlist) then LootCount_DropCount_TT:Hide(); return; end
+	AltTT.Loading=nil;
+	if (not itemsinlist) then AltTT:Hide(); return; end
 
 	list=DropCount:SortByRatio(list);
 	line=1;
 	while(list[line]) do
-		LootCount_DropCount_TT:AddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
+		AltTT:AddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
 		line=line+1;
 	end
-	LootCount_DropCount_TT:Show();
+	AltTT:Show();
 end
 
 function DropCount.Cache:AddItem(item)
@@ -3046,6 +3140,144 @@ end
 function DropCount.LootCount:ToggleMenu(button)
 	DropCount.ThisBuffer=button;
 	ToggleDropDownMenu(nil,nil,LootCount_DropCount_MenuOptions,button,0,0);
+end
+
+function DropCountXML:GUI_Search()
+	local find=LCDC_VendorSearch_FindText:GetText();
+	LCDC_ResultListScroll:DMClear();
+	if (not find) then return; end
+	find=find:lower();
+	LCDC_VendorSearch.SearchTerm=find;
+
+	-- Search vendors
+	local entry;
+	local started=nil;
+	if (LCDC_VendorSearch_UseVendors:GetChecked()) then
+		for vendor,vData in pairs(LootCount_DropCount_DB.Vendor) do
+			local testdata=vData; testdata=testdata:lower();
+			if (testdata:find(find)) then
+				local X,Y,Zone,Faction,Repair=DropCount.DB.Vendor:ReadBaseData(vendor);
+				if (Faction==CONST.MYFACTION or Faction=="Neutral") then
+					if (not started) then
+						entry=LCDC_ResultListScroll:DMAdd("Vendors",nil,nil,-1);
+						entry.Tooltip=nil;
+						wipe(entry.DB);
+						started=true;
+					end
+					entry=LCDC_ResultListScroll:DMAdd(Zone..": "..vendor,nil,nil,0);
+					wipe(entry.DB);
+					if (not entry.Tooltip) then entry.Tooltip={}; end
+					entry.Tooltip[1]=Faction.." vendor: "..vendor;
+					entry.Tooltip[2]=Zone..string.format(" (%.0f,%.0f)",X,Y);
+					if (Repair) then entry.Tooltip[3]="Can repair your stuff"; end
+					entry.DB.Section="Vendor";
+					entry.DB.Entry=vendor;
+					entry.DB.Data=vData;
+				end
+			end
+		end
+	end
+
+	-- Search quests
+	if (LCDC_VendorSearch_UseQuests:GetChecked()) then
+		started=nil;
+		for npc,nData in pairs(LootCount_DropCount_DB.Quest[CONST.MYFACTION]) do
+			local testdata=nData; testdata=testdata:lower();
+			if (testdata:find(find)) then
+				if (not started) then
+					entry=LCDC_ResultListScroll:DMAdd("Quests",nil,nil,-1);
+					entry.Tooltip=nil;
+					wipe(entry.DB);
+					started=true;
+				end
+				local npcData=DropCount.DB.Quest:Read(CONST.MYFACTION,npc);
+				entry=LCDC_ResultListScroll:DMAdd(npcData.Zone..": "..npc,nil,nil,0);
+				wipe(entry.DB);
+				if (not entry.Tooltip) then entry.Tooltip={}; end
+				entry.Tooltip[1]="Quest-giver: "..npc;
+				entry.Tooltip[2]=npcData.Zone..string.format(" (%.0f,%.0f)",npcData.X,npcData.Y);
+				entry.DB.Section="Quest";
+				entry.DB.Entry=npc;
+				entry.DB.Data=nData;
+			end
+		end
+	end
+
+	-- Search books
+	if (LCDC_VendorSearch_UseBooks:GetChecked()) then
+		started=nil;
+		for book,bData in pairs(LootCount_DropCount_DB.Book) do
+			local include=nil;
+			local testdata=book; testdata=testdata:lower();
+			if (testdata:find(find)) then include=true;
+			else
+				for _,iData in ipairs(bData) do
+					local testdata=iData.Zone; testdata=testdata:lower();
+					if (testdata:find(find)) then include=true; break; end
+				end
+			end
+			if (include) then
+				if (not started) then
+					entry=LCDC_ResultListScroll:DMAdd("Books",nil,nil,-1);
+					entry.Tooltip=nil;
+					wipe(entry.DB);
+					started=true;
+				end
+				entry=LCDC_ResultListScroll:DMAdd(book,nil,nil,0);
+				wipe(entry.DB);
+				if (not entry.Tooltip) then entry.Tooltip={}; end
+				entry.Tooltip[1]="Book: "..book;
+				for index,iData in ipairs(bData) do
+					entry.Tooltip[index+1]=iData.Zone..string.format(" (%.0f,%.0f)",iData.X,iData.Y);
+				end
+				entry.DB.Section="Book";
+				entry.DB.Entry=book;
+			end
+		end
+	end
+
+	-- Search items
+	if (LCDC_VendorSearch_UseItems:GetChecked()) then
+		started=nil;
+		for item,iData in pairs(LootCount_DropCount_DB.Item) do
+			local testdata=iData; testdata=testdata:lower();
+			if (testdata:find(find)) then
+				if (not started) then
+					entry=LCDC_ResultListScroll:DMAdd("Items",nil,nil,-1);
+					entry.Tooltip=nil;
+					wipe(entry.DB);
+					started=true;
+				end
+				DropCount.Cache:AddItem(item);
+				local itemData=DropCount.DB.Item:Read(item);
+				entry=LCDC_ResultListScroll:DMAdd(itemData.Item,nil,nil,0);
+				wipe(entry.DB);
+				entry.DB.Section="Item";
+				entry.DB.Entry=item;
+				entry.DB.Data=itemData;
+			end
+		end
+	end
+
+	-- Search mobs
+	if (LCDC_VendorSearch_UseMobs:GetChecked()) then
+		started=nil;
+		for mob,mData in pairs(LootCount_DropCount_DB.Count) do
+			local testdata=mob; testdata=testdata:lower();
+			if (testdata:find(find)) then
+				if (not started) then
+					entry=LCDC_ResultListScroll:DMAdd("Creatures",nil,nil,-1);
+					entry.Tooltip=nil;
+					wipe(entry.DB);
+					started=true;
+				end
+				entry=LCDC_ResultListScroll:DMAdd(mob,nil,nil,0);
+				wipe(entry.DB);
+				entry.DB.Section="Creature";
+				entry.DB.Entry=mob;
+			end
+		end
+	end
 end
 
 function DropCountXML:BuildMenu(button)
@@ -4200,8 +4432,19 @@ function DropCount.Menu:AddChecker(text,value,func,icon)
 	info.icon=icon;
 	UIDropDownMenu_AddButton(info,1);
 end
+function DropCount.Menu:AddButton(text,func,icon)
+	local info=UIDropDownMenu_CreateInfo();
+	info.text=CONST.C_BASIC..text;
+	info.func=func;
+	info.icon=icon;
+	UIDropDownMenu_AddButton(info,1);
+end
 
 function DropCountXML.Menu.MinimapInitialise()
+	DropCount.Menu:AddHeader("GUI");
+	DropCount.Menu:AddButton("Open search-window",DropCount.Menu.OpenSearchWindow,"");
+
+	DropCount.Menu:AddHeader(" ");
 	DropCount.Menu:AddHeader("Minimap");
 	DropCount.Menu:AddChecker("Vendors: ",LootCount_DropCount_DB.VendorMinimap,DropCount.Menu.ToggleVendorsMinimap,"Interface\\GROUPFRAME\\UI-Group-MasterLooter");
 	DropCount.Menu:AddChecker("Repair: ",LootCount_DropCount_DB.RepairMinimap,DropCount.Menu.ToggleRepairMinimap,"Interface\\GossipFrame\\VendorGossipIcon");
@@ -4259,6 +4502,9 @@ function DropCount.Menu.ToggleQuestWorldmap()
 	else LootCount_DropCount_DB.QuestWorldmap=true; end
 	DropCount.Icons.MakeWM:Quest();
 	DropCount.Icons:Plot();
+end
+function DropCount.Menu.OpenSearchWindow()
+	LCDC_VendorSearch:Show();
 end
 
 --[[    Minimap icon stuff    ]]

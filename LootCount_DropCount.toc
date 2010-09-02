@@ -12,5 +12,6 @@
 
 Astrolabe\Load.xml
 DuckMod.lua
+DuckMod_Widgets\Widgets.xml
 localization.en.lua
 LootCount_DropCount.xml

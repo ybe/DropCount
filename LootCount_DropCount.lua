@@ -1,5 +1,5 @@
 --[[****************************************************************
-	LootCount DropCount v0.76
+	LootCount DropCount v0.80
 
 	Author: Evil Duck
 	****************************************************************
@@ -9,12 +9,12 @@
 
 	****************************************************************]]
 
---      separated instance and world drop areas, changed quest faction
+-- 0.80 separated instance and world drop areas, changed quest faction
 --      to player faction, less memory-intentsive at DB.Write, time-sliced
 --      removal of mobs from item drop-list, tuned cpu-load at merge a
 --      bit more, fixed bug in quest-convert (seven) that could lose
 --      area-names, minor sorting in NPC quests, fixed a bug in item
---      search, added search for area by item
+--      search, added search for area by item, added search GUI
 -- 0.76 added lower limit for merge throttle, added check for duplicate
 --      q-givers in multiple factions, remove zero-items from vendors
 --      when visiting them, moblist on <alt> + mouseover is now sorted
@@ -65,7 +65,7 @@
 -- Orb of Grishnath (it's not a drop at all)
 
 
-LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v0.76";
+LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v0.80";
 LOOTCOUNT_DROPCOUNT = "DropCount";
 SLASH_DROPCOUNT1 = "/dropcount";
 SLASH_DROPCOUNT2 = "/lcdc";
@@ -3144,6 +3144,7 @@ end
 
 function DropCountXML:GUI_Search()
 	local find=LCDC_VendorSearch_FindText:GetText();
+	find=strtrim(find); if (find=="") then return; end
 	LCDC_ResultListScroll:DMClear();
 	if (not find) then return; end
 	find=find:lower();

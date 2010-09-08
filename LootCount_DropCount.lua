@@ -14,7 +14,8 @@
 --      removal of mobs from item drop-list, tuned cpu-load at merge a
 --      bit more, fixed bug in quest-convert (seven) that could lose
 --      area-names, minor sorting in NPC quests, fixed a bug in item
---      search, added search for area by item, added search GUI
+--      search, added search for area by item, added search GUI, purge
+--      cache after merge
 -- 0.76 added lower limit for merge throttle, added check for duplicate
 --      q-givers in multiple factions, remove zero-items from vendors
 --      when visiting them, moblist on <alt> + mouseover is now sorted
@@ -58,6 +59,14 @@
 -- + Remember merge with neutral quests for the v7 non-neutral DB
 -- + Merge the new dual best area
 -- - Filtering of quest display
+-- + purge cache after merge
+-- + Extra tooltip on search listbox click
+
+-- CATACLYSM
+-- http://forums.worldofwarcraft.com/thread.html?topicId=25626580975&sid=1
+-- getglobal -> _G
+-- eventhandler() -> eventhandler(self,event,...)
+-- "this" goes away
 
 
 -- CHECK:
@@ -866,10 +875,16 @@ function DropCountXML:OnEvent(event,...)
 		GameTooltip:Hide();
 	end
 	if (event=="DMEVENT_LISTBOX_ITEM_CLICKED") then
-
---	entry.DB.Section="Vendor";
---	entry.DB.Entry=vendor;
---	entry.DB.Data=vData;
+		local entry=frame.DMTheList[index];
+		if (entry.DB.Section=="Vendor") then
+			GameTooltip:Hide();
+			DropCount.Tooltip:SetNPCContents(entry.DB.Entry,frame,GameTooltip,true);
+		elseif (entry.DB.Section=="Quest") then
+			GameTooltip:Hide();
+			DropCount.Tooltip:QuestList(CONST.MYFACTION,entry.DB.Entry,frame,GameTooltip);
+		elseif (entry.DB.Section=="Item") then
+			SetItemRef(entry.DB.Entry);
+		end
 	end
 end
 
@@ -1062,7 +1077,7 @@ function DropCount:GetQuestName(link)
 	LootCount_DropCount_CF:ClearLines();
 	LootCount_DropCount_CF:SetHyperlink(link);
 
-	local text=getglobal("LootCount_DropCount_CFTextLeft1"):GetText();
+	local text=_G["LootCount_DropCount_CFTextLeft1"]:GetText();
 	LootCount_DropCount_CF:Hide();
 	return text;
 end
@@ -1775,7 +1790,7 @@ function DropCount.DB.Count:Read(mob,base)
 	mTable.Zone,mTable.Kill,mTable.Skinning=strsplit(CONST.SEP1,base[mob]);
 	mTable.Kill=tonumber(mTable.Kill);
 	mTable.Skinning=tonumber(mTable.Skinning);
-	if (mTable.Kill==0) then mTable.Kill=nil; end
+--	if (mTable.Kill==0) then mTable.Kill=nil; end
 	if (mTable.Skinning==0) then mTable.Skinning=nil; end
 	return mTable;
 end
@@ -2409,7 +2424,7 @@ function DropCount.LootCount.UpdateButton(button)
 	if (not button) then return; end			-- End of iteration
 
 	if (not button.User or not button.User.Texture) then return; end
-	local texture=getglobal(button:GetName().."IconTexture");
+	local texture=_G[button:GetName().."IconTexture"];
 	texture:SetTexture(button.User.Texture);			-- Set texture from item
 	if (not LootCount_DropCount_DB.Item[button.User.itemID]) then return; end			-- Nothing assigned yet
 	local iTable=DropCount.DB.Item:Read(button.User.itemID);
@@ -2916,23 +2931,24 @@ function DropCount:GetQuestStatus(checkquest)
 	return CONST.QUEST_NOTSTARTED,Green;
 end
 
-function DropCount.Tooltip:QuestList(faction,npc,parent)
+function DropCount.Tooltip:QuestList(faction,npc,parent,frame)
+	if (not frame) then frame=LootCount_DropCount_TT; end
 	local nTable=DropCount.DB.Quest:Read(faction,npc);
 	if (not nTable) then return; end
 	if (not nTable.Quests) then return; end
 
-	LootCount_DropCount_TT:ClearLines();
+	frame:ClearLines();
 	if (not parent) then parent=UIParent; end
-	LootCount_DropCount_TT:SetOwner(parent,"ANCHOR_CURSOR");
-	LootCount_DropCount_TT:SetText(npc);
+	frame:SetOwner(parent,"ANCHOR_CURSOR");
+	frame:SetText(npc);
 	for _,qData in pairs(nTable.Quests) do
 		local quest,header;
 		quest=qData.Quest; header=qData.Header;
 		if (not header) then header=""; end
 		local _,colour=DropCount:GetQuestStatus(quest);
-		LootCount_DropCount_TT:AddDoubleLine("  "..colour..quest,colour..header,1,1,1,1,1,1);
+		frame:AddDoubleLine("  "..colour..quest,colour..header,1,1,1,1,1,1);
 	end
-	LootCount_DropCount_TT:Show();
+	frame:Show();
 end
 
 
@@ -2961,18 +2977,21 @@ function DropCount.Tooltip:Book(book,parent)
 	LootCount_DropCount_TT:Show();
 end
 
-function DropCount.Tooltip:SetNPCContents(unit,parent)
+function DropCount.Tooltip:SetNPCContents(unit,parent,frame,force)
 	local breakit=nil;
-	if (LootCount_DropCount_DB.Quest) then
-		for faction,fTable in pairs(LootCount_DropCount_DB.Quest) do
-			for npc,nTable in pairs(fTable) do
-				if (npc==unit) then
-					breakit=true;
-					DropCount.Tooltip:QuestList(CONST.MYFACTION,unit,parent);
+	if (not frame) then frame=LootCount_DropCount_TT; end
+	if (not force) then
+		if (LootCount_DropCount_DB.Quest) then
+			for faction,fTable in pairs(LootCount_DropCount_DB.Quest) do
+				for npc,nTable in pairs(fTable) do
+					if (npc==unit) then
+						breakit=true;
+						DropCount.Tooltip:QuestList(CONST.MYFACTION,unit,parent,frame);
+					end
+					if (breakit) then break; end
 				end
 				if (breakit) then break; end
 			end
-			if (breakit) then break; end
 		end
 	end
 	if (not LootCount_DropCount_DB.Vendor) then return; end
@@ -2981,12 +3000,12 @@ function DropCount.Tooltip:SetNPCContents(unit,parent)
 	local vData=DropCount.DB.Vendor:Read(unit);
 	if (not vData) then return; end
 
-	LootCount_DropCount_TT:ClearLines();
+	frame:ClearLines();
 	if (not parent) then parent=UIParent; end
-	LootCount_DropCount_TT:SetOwner(parent,"ANCHOR_CURSOR");
+	frame:SetOwner(parent,"ANCHOR_CURSOR");
 	local line=unit;
 	if (vData.Repair) then line=line..CONST.C_GREEN.." (Repair)"; end
-	LootCount_DropCount_TT:SetText(line);
+	frame:SetText(line);
 
 	local list={};
 	line=1;
@@ -3009,22 +3028,22 @@ function DropCount.Tooltip:SetNPCContents(unit,parent)
 		end
 	end
 	if (missingitems>0) then
-		LootCount_DropCount_TT:AddDoubleLine("Missing "..missingitems.." items.","",1,0,0,0,0,0);
-		LootCount_DropCount_TT:AddDoubleLine("Loading...","",1,0,0,0,0,0);
-		LootCount_DropCount_TT:Show();
-		LootCount_DropCount_TT.Loading=true;
+		frame:AddDoubleLine("Missing "..missingitems.." items.","",1,0,0,0,0,0);
+		frame:AddDoubleLine("Loading...","",1,0,0,0,0,0);
+		frame:Show();
+		frame.Loading=true;
 		return;
 	end
-	LootCount_DropCount_TT.Loading=nil;
-	if (not itemsinlist) then LootCount_DropCount_TT:Hide(); return; end
+	frame.Loading=nil;
+	if (not itemsinlist) then frame:Hide(); return; end
 
 	list=DropCount:SortByNames(list);
 	line=1;
 	while(list[line]) do
-		LootCount_DropCount_TT:AddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
+		frame:AddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
 		line=line+1;
 	end
-	LootCount_DropCount_TT:Show();
+	frame:Show();
 end
 
 function DropCount:SetLootlist(unit,AltTT)
@@ -3251,7 +3270,8 @@ function DropCountXML:GUI_Search()
 				end
 				DropCount.Cache:AddItem(item);
 				local itemData=DropCount.DB.Item:Read(item);
-				entry=LCDC_ResultListScroll:DMAdd(itemData.Item,nil,nil,0);
+--				entry=LCDC_ResultListScroll:DMAdd(itemData.Item,nil,nil,0);
+				entry=LCDC_ResultListScroll:DMAdd(itemData.Item,nil,nil,0,GetItemIcon(item));
 				wipe(entry.DB);
 				entry.DB.Section="Item";
 				entry.DB.Entry=item;
@@ -3779,9 +3799,9 @@ function DropCount.OnUpdate:RunConvertAndMerge(elapsed)
 					DropCount.Tracker.Merge.FPS.Time=DropCount.Tracker.Merge.FPS.Time-CONST.BURSTSIZE;
 					if (DropCount.Tracker.Merge.FPS.Frames>(30*CONST.BURSTSIZE)) then
 						DropCount.Tracker.Merge.Burst=DropCount.Tracker.Merge.Burst*1.05;
-					elseif (DropCount.Tracker.Merge.FPS.Frames<(20*CONST.BURSTSIZE)) then
+					elseif (DropCount.Tracker.Merge.FPS.Frames<(25*CONST.BURSTSIZE)) then
 						DropCount.Tracker.Merge.Burst=DropCount.Tracker.Merge.Burst/2;
-						if (DropCount.Tracker.Merge.Burst<CONST.BURSTSIZE/20) then DropCount.Tracker.Merge.Burst=CONST.BURSTSIZE/20; end
+						if (DropCount.Tracker.Merge.Burst<CONST.BURSTSIZE/25) then DropCount.Tracker.Merge.Burst=CONST.BURSTSIZE/25; end
 					end
 					-- This looks a bit weird, but it will in effect leave a portion
 					-- of the last frame to make better use of the average.
@@ -3965,13 +3985,11 @@ function DropCount:MergeDatabase()
 			for _,_ in pairs(qT) do DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1; end
 		end
 		if (DropCount.Tracker.Merge.Goal>0) then
-			if (DropCount.Debug) then
-				DuckLib:Chat(LOOTCOUNT_DROPCOUNT_VERSIONTEXT,1,.3,.3);
-				DuckLib:Chat("There are "..DropCount.Tracker.Merge.Goal.." entries to merge with your database.",1,.6,.6);
-				DuckLib:Chat("A summary will be presented when the process is done.",1,.6,.6);
-				DuckLib:Chat("This will take a few minutes, depending on the speed of your computer.",1,.6,.6);
-				DuckLib:Chat("You can play WoW while this is running is the background, even thought you may experience some lag.",1,.6,.6);
-			end
+			DuckLib:Chat(LOOTCOUNT_DROPCOUNT_VERSIONTEXT,1,.3,.3);
+			DuckLib:Chat("There are "..DropCount.Tracker.Merge.Goal.." entries to merge with your database.",1,.6,.6);
+			DuckLib:Chat("A summary will be presented when the process is done.",1,.6,.6);
+			DuckLib:Chat("This will take a few minutes, depending on the speed of your computer.",1,.6,.6);
+			DuckLib:Chat("You can play WoW while this is running is the background, even thought you may experience some lag.",1,.6,.6);
 		end
 	end
 
@@ -4218,10 +4236,23 @@ function DropCount:MergeDatabase()
 		StaticPopupDialogs["LCDC_D_NOTIFICATION"].text=text;
 		StaticPopup_Show("LCDC_D_NOTIFICATION");
 	end
+
 	DropCount.Icons.MakeMM:Vendor();
 	DropCount.Icons.MakeMM:Book();
 	DropCount.Icons.MakeMM:Quest();
+
+	DropCount.DB:Purge();
+
 	return true;
+end
+
+-- Purge the read/write cache. After a merge, this will free up 20+ MB
+function DropCount.DB:Purge()
+	DropCount.DB.Count.Fast=nil;
+	DropCount.DB.Item.Fast=nil;
+	DropCount.DB.Quest.Fast=nil;
+	DropCount.DB.Vendor.Fast=nil;
+	collectgarbage("collect");
 end
 
 function DropCount.DB:PreCheck(raw,contents)

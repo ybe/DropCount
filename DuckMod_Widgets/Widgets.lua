@@ -12,14 +12,15 @@ if (DuckMod_Widgets_Version<1) then				-- This version
 	DM_STATE_CHECKED=2;
 	DM_STATE_UNCHECKED=3;
 
-	if (not DuckModXML) then DuckModXML={}; end	-- If it exists, just overlay
-	if (not DuckModXML.ListBox) then DuckModXML.ListBox={}; end	-- If it exists, just overlay
+	if (not DuckWidget) then DuckWidget={}; end	-- If it exists, just overlay
+	if (not DuckWidget.ListBox) then DuckWidget.ListBox={}; end	-- If it exists, just overlay
+	if (not DuckWidget.CheckBox) then DuckWidget.CheckBox={}; end	-- If it exists, just overlay
 
 -- Generic mouse-wheel handler for scrolling-panes.
 -- o The main use for this is when a pane has other items in it that
 --   may receive it in stead. They may then call this function with
 --   their parent as an argument.
-function DuckModXML.MouseWheel(slider)
+function DuckWidget.MouseWheel(slider)
 	if (not slider) then slider=this; end
 	local min,max=slider:GetMinMaxValues(); if (not min or not max) then return; end
 	local step=slider:GetValueStep(); if (not step) then return; end
@@ -29,28 +30,32 @@ function DuckModXML.MouseWheel(slider)
 end
 
 -- Some helpers to get past later updates to the WoW code
-function DuckModXML.SetButtonText(button,text)
+function DuckWidget.SetButtonText(button,text)
 	getglobal(button:GetName().."Text"):SetText(text);
 end
-function DuckModXML.GetButtonText(button,text)
+function DuckWidget.GetButtonText(button,text)
 	return getglobal(button:GetName().."Text"):GetText(text);
 end
-function DuckModXML.SetButtonTextColor(button,r,g,b,a)
+function DuckWidget.SetButtonTextColor(button,r,g,b,a)
 	getglobal(button:GetName().."Text"):SetTextColor(r,g,b,a);
 end
 
+-- CheckBox
+function DuckWidget.CheckBox.SetIcon(button,image)
+	_G[button:GetName().."IconTexture"]:SetTexture(image);
+end
 
 -- ListBox
-function DuckModXML.ListBox.VisibleEntries(frame)
+function DuckWidget.ListBox.VisibleEntries(frame)
 	local fHeight=frame:GetHeight();
 	if (not _G[frame:GetName().."_Entry1"]) then return 1; end
 	local eHeight=_G[frame:GetName().."_Entry1"]:GetHeight();
 	return math.floor((fHeight+2)/(eHeight+2));
 end
 
-function DuckModXML.ListBox.Clear(frame)
+function DuckWidget.ListBox.Clear(frame)
 	frame.DMEntries=0;
-	DuckModXML.ListBox.Redraw(frame);
+	DuckWidget.ListBox.Redraw(frame);
 end
 
 -- Add an entry to the list
@@ -58,9 +63,9 @@ end
 -- entry   : Text of the entry to add
 -- state   : LIST, checked, unchecked, inactive
 -- position: END, number
-function DuckModXML.ListBox.Add(frame,entry,state,position,indent)
+function DuckWidget.ListBox.Add(frame,entry,state,position,indent,icon,click)
 	frame.DMEntries=frame.DMEntries+1;									-- One more in list
-	local length=(frame.DMEntries-DuckModXML.ListBox.VisibleEntries(frame))+1;
+	local length=(frame.DMEntries-DuckWidget.ListBox.VisibleEntries(frame))+1;
 	if (length<1) then length=1; end
 	local _,cur=_G[frame:GetName().."_Scroll"]:GetMinMaxValues();	-- Get span
 	if (cur~=length) then
@@ -69,7 +74,7 @@ function DuckModXML.ListBox.Add(frame,entry,state,position,indent)
 	if (not position) then position=frame.DMEntries; end	-- Position not provided, so add at the end
 	local i=frame.DMEntries;								-- Make room for it if it's not appended
 	while(i>position) do frame.DMTheList[i]=frame.DMTheList[i-1]; i=i-1; end
-	return DuckModXML.ListBox.Set(frame,entry,state,position,indent);	-- Change it to the supplied info
+	return DuckWidget.ListBox.Set(frame,entry,state,position,indent,icon,click);	-- Change it to the supplied info
 end
 
 -- Change an entry in the list
@@ -77,20 +82,22 @@ end
 -- entry   : Text of the entry to add
 -- state   : LIST, checked, unchecked, inactive
 -- position: END, number
-function DuckModXML.ListBox.Set(frame,entry,state,position,indent)
-	if (not position) then return DuckModXML.ListBox.Add(frame,entry,state,position,indent); end
+function DuckWidget.ListBox.Set(frame,entry,state,position,indent,icon,click)
+	if (not position) then return DuckWidget.ListBox.Add(frame,entry,state,position,indent,icon,click); end
 	if (not frame.DMTheList) then frame.DMTheList={}; end
 	frame.DMTheList[position]={
 		Entry=entry,
 		State=state,
 		Tooltip=nil,
 		Indent=indent,
+		Icon=icon,
+		Click=click,
 		DB={},
 	};
 
 	-- Sort list
 	if (frame.defaultSort) then
-		position=DuckModXML.ListBox.Sort(frame.DMTheList,frame.DMEntries,position);
+		position=DuckWidget.ListBox.Sort(frame.DMTheList,frame.DMEntries,position);
 	end
 --	if (frame.defaultSort and frame.DMEntries>1) then
 --		local i=1;
@@ -104,11 +111,11 @@ function DuckModXML.ListBox.Set(frame,entry,state,position,indent)
 --		end
 --	end
 
-	DuckModXML.ListBox.Redraw(frame);
+	DuckWidget.ListBox.Redraw(frame);
 	return frame.DMTheList[position];
 end
 
-function DuckModXML.ListBox.Sort(list,length,index)
+function DuckWidget.ListBox.Sort(list,length,index)
 	indent=list[index].Indent;		-- This level
 	-- Up
 	while(index>1 and list[index-1].Indent==indent and list[index].Entry<list[index-1].Entry) do
@@ -124,11 +131,11 @@ function DuckModXML.ListBox.Sort(list,length,index)
 	return index;
 end
 
-function DuckModXML.ListBox.Redraw(frame)
+function DuckWidget.ListBox.Redraw(frame)
 	if (frame.DMEntries==nil) then return; end
 	if (not frame.DMTheList) then frame.DMTheList={}; end				-- No list
 	local i;
-	local visible=DuckModXML.ListBox.VisibleEntries(frame);
+	local visible=DuckWidget.ListBox.VisibleEntries(frame);
 	local fName=frame:GetName();
 
 	-- Visible area not populated by buttons, so create all buttons
@@ -156,6 +163,7 @@ function DuckModXML.ListBox.Redraw(frame)
 				indent=button.defaultIndent*(indent+1);
 				_G[button:GetName().."Text"]:SetPoint("LEFT","$parent","LEFT",indent,0);
 				button:SetText(text);
+				button:SetIcon(frame.DMTheList[i+offset].Icon);
 				button:Show();
 			else
 				button:Hide();
@@ -171,15 +179,15 @@ function DuckModXML.ListBox.Redraw(frame)
 	end
 end
 
-function DuckModXML.ListBox.SliderChanged(frame)
-	DuckModXML.ListBox.Redraw(frame);
+function DuckWidget.ListBox.SliderChanged(frame)
+	DuckWidget.ListBox.Redraw(frame);
 end
 
-function DuckModXML.ListBox.SetSelectionChanged(self,func)
+function DuckWidget.ListBox.SetSelectionChanged(self,func)
 	this.DM.SelectionChanged=func;
 end
 
-function DuckModXML.ListBox.SendEvent(button,event)
+function DuckWidget.ListBox.SendEvent(button,event)
 	local handler=button:GetParent():GetScript("OnEvent");
 	if (not handler) then return; end
 
@@ -188,10 +196,10 @@ function DuckModXML.ListBox.SendEvent(button,event)
 --	DEFAULT_CHAT_FRAME:AddMessage(index,1,0,0);
 	arg1=button:GetParent();	-- until cataclysm
 	arg2=index;					-- until cataclysm
-	handler(this,event,button,index);
+	handler(this,event,button:GetParent(),index);
 end
 
-function DuckModXML.ListBox.ListButtonClicked(button)
+function DuckWidget.ListBox.ListButtonClicked(button)
 	local _,i=button:GetName():find("_Entry");
 	if (not i) then return; end
 	i=tonumber(button:GetName():sub(i+1));
@@ -201,20 +209,20 @@ function DuckModXML.ListBox.ListButtonClicked(button)
 	elseif (state==DM_STATE_UNCHECKED) then button:SetChecked(nil);
 	else button:SetChecked(nil);
 	end
-	DuckModXML.ListBox.SendEvent(button,"DMEVENT_LISTBOX_ITEM_CLICKED");
+	DuckWidget.ListBox.SendEvent(button,"DMEVENT_LISTBOX_ITEM_CLICKED");
 end
 
-function DuckModXML.ListBox.ListButtonHover(button,enter)
+function DuckWidget.ListBox.ListButtonHover(button,enter)
 	local event="DMEVENT_LISTBOX_ITEM_";
 	if (enter) then event=event.."ENTER"; else event=event.."LEAVE"; end
-	DuckModXML.ListBox.SendEvent(button,event);
+	DuckWidget.ListBox.SendEvent(button,event);
 end
 
-function DuckModXML.ListBox.SetFuncs(frame)
-	frame.DMSetSelectionChanged=DuckModXML.ListBox.SetSelectionChanged;
-	frame.DMAdd=DuckModXML.ListBox.Add;
-	frame.DMSet=DuckModXML.ListBox.Set;
-	frame.DMClear=DuckModXML.ListBox.Clear;
+function DuckWidget.ListBox.SetFuncs(frame)
+	frame.DMSetSelectionChanged=DuckWidget.ListBox.SetSelectionChanged;
+	frame.DMAdd=DuckWidget.ListBox.Add;
+	frame.DMSet=DuckWidget.ListBox.Set;
+	frame.DMClear=DuckWidget.ListBox.Clear;
 end
 
 --[[

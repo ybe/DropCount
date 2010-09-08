@@ -77,7 +77,7 @@
 		</Anchors>
 
 		<TitleRegion setAllPoints="true"/>
-		<Backdrop edgeFile="Interface\TutorialFrame\TutorialFrameBorder" bgFile="Interface\CHARACTERFRAME\UI-Party-Background" tile="true">
+		<Backdrop edgeFile="Interface\TutorialFrame\TutorialFrameBorder" bgFile="Interface\GLUES\MODELS\UI_MainMenu_BurningCrusade\dp_nebula" tile="false">
 			<EdgeSize><AbsValue val="32"/></EdgeSize>
 			<TileSize><AbsValue val="16"/></TileSize>
 			<BackgroundInsets><AbsInset left="2" right="2" top="2" bottom="2"/></BackgroundInsets>
@@ -145,8 +145,6 @@
 					<Anchor point="LEFT" ><Offset><AbsDimension x="75"/></Offset></Anchor>
 				</Anchors>
 				<Scripts>
-					<OnEnter>GameTooltip:SetOwner(this,"ANCHOR_RIGHT");GameTooltip:SetText("Enter full or partial search-pattern");GameTooltip:Show();</OnEnter>
-					<OnLeave>ResetCursor();GameTooltip:Hide();</OnLeave>
 					<OnEnterPressed>DropCountXML:GUI_Search();</OnEnterPressed>
 				</Scripts>
 			</EditBox>

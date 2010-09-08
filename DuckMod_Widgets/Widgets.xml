@@ -14,7 +14,7 @@
 		</ThumbTexture>
 		<Scripts>
 			<OnLoad>this:SetValueStep(1);</OnLoad>
-			<OnValueChanged>DuckModXML.ListBox.SliderChanged(this:GetParent());</OnValueChanged>
+			<OnValueChanged>DuckWidget.ListBox.SliderChanged(this:GetParent());</OnValueChanged>
 		</Scripts>
 	</Slider>
 
@@ -48,13 +48,14 @@
 		<Scripts>
 			<OnLoad>
 				this.defaultIndent=19;
-				this.SetText=DuckModXML.SetButtonText;
-				this.GetText=DuckModXML.GetButtonText;
-				this.SetTextColor=DuckModXML.SetButtonTextColor;
+				this.SetText=DuckWidget.SetButtonText;
+				this.GetText=DuckWidget.GetButtonText;
+				this.SetTextColor=DuckWidget.SetButtonTextColor;
+				this.SetIcon=DuckWidget.CheckBox.SetIcon;
 			</OnLoad>
-			<OnClick>DuckModXML.ListBox.ListButtonClicked(this);</OnClick>
-			<OnEnter>DuckModXML.ListBox.ListButtonHover(this,true);</OnEnter>
-			<OnLeave>DuckModXML.ListBox.ListButtonHover(this,nil);</OnLeave>
+			<OnClick>DuckWidget.ListBox.ListButtonClicked(this);</OnClick>
+			<OnEnter>DuckWidget.ListBox.ListButtonHover(this,true);</OnEnter>
+			<OnLeave>DuckWidget.ListBox.ListButtonHover(this,nil);</OnLeave>
 		</Scripts>
 	</CheckButton>
 
@@ -102,9 +103,9 @@
 			<OnLoad>
 				this.DMEntries=0;
 				this.defaultSort=true;
-				DuckModXML.ListBox.SetFuncs(this);
+				DuckWidget.ListBox.SetFuncs(this);
 			</OnLoad>
-			<OnMouseWheel>DuckModXML.MouseWheel(_G[this:GetName().."_Scroll"]);</OnMouseWheel>
+			<OnMouseWheel>DuckWidget.MouseWheel(_G[this:GetName().."_Scroll"]);</OnMouseWheel>
 			<OnScrollRangeChanged>ScrollFrame_OnScrollRangeChanged(arg2);</OnScrollRangeChanged>
 		</Scripts>
 	</Frame>

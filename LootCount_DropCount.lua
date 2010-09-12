@@ -9,6 +9,7 @@
 
 	****************************************************************]]
 
+-- 0.82 fixed a bug in "DB.Purge", included correct database
 -- 0.80 separated instance and world drop areas, changed quest faction
 --      to player faction, less memory-intentsive at DB.Write, time-sliced
 --      removal of mobs from item drop-list, tuned cpu-load at merge a
@@ -4248,10 +4249,10 @@ end
 
 -- Purge the read/write cache. After a merge, this will free up 20+ MB
 function DropCount.DB:Purge()
-	DropCount.DB.Count.Fast=nil;
-	DropCount.DB.Item.Fast=nil;
-	DropCount.DB.Quest.Fast=nil;
-	DropCount.DB.Vendor.Fast=nil;
+	wipe(self.Vendor.Fast);
+	wipe(self.Quest.Fast); self.Quest.Fast={ MD={}, };
+	wipe(self.Count.Fast); self.Count.Fast={ MD={}, };
+	wipe(self.Item.Fast); self.Item.Fast={ MD={}, };
 	collectgarbage("collect");
 end
 

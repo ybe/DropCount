@@ -1,5 +1,5 @@
 --[[****************************************************************
-	LootCount DropCount v0.80
+	LootCount DropCount v0.82
 
 	Author: Evil Duck
 	****************************************************************
@@ -75,11 +75,13 @@
 -- Orb of Grishnath (it's not a drop at all)
 
 
-LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v0.80";
+LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v0.82";
 LOOTCOUNT_DROPCOUNT = "DropCount";
 SLASH_DROPCOUNT1 = "/dropcount";
 SLASH_DROPCOUNT2 = "/lcdc";
 local DuckLib=DuckMod[2.02];
+
+local cataclysm=nil;
 
 
 --DropCount={
@@ -364,6 +366,7 @@ local Astrolabe = DongleStub("Astrolabe-0.4");
 
 -- Set up for handling
 function DropCountXML:OnLoad()
+	if (not this) then cataclysm=true; end
 	this:RegisterEvent("ADDON_LOADED");
 	this:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
 	this:RegisterEvent("PLAYER_FOCUS_CHANGED");

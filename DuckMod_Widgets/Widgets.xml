@@ -13,8 +13,8 @@
 			<Size><AbsDimension x="32" y="32"/></Size>
 		</ThumbTexture>
 		<Scripts>
-			<OnLoad>this:SetValueStep(1);</OnLoad>
-			<OnValueChanged>DuckWidget.ListBox.SliderChanged(this:GetParent());</OnValueChanged>
+			<OnLoad>self:SetValueStep(1);</OnLoad>
+			<OnValueChanged>DuckWidget.ListBox.SliderChanged(self:GetParent(),delta);</OnValueChanged>
 		</Scripts>
 	</Slider>
 
@@ -47,15 +47,15 @@
 		<DisabledFont inherits="GameFontDisable" justifyH="LEFT"/>
 		<Scripts>
 			<OnLoad>
-				this.defaultIndent=19;
-				this.SetText=DuckWidget.SetButtonText;
-				this.GetText=DuckWidget.GetButtonText;
-				this.SetTextColor=DuckWidget.SetButtonTextColor;
-				this.SetIcon=DuckWidget.CheckBox.SetIcon;
+				self.defaultIndent=19;
+				self.SetText=DuckWidget.SetButtonText;
+				self.GetText=DuckWidget.GetButtonText;
+				self.SetTextColor=DuckWidget.SetButtonTextColor;
+				self.SetIcon=DuckWidget.CheckBox.SetIcon;
 			</OnLoad>
-			<OnClick>DuckWidget.ListBox.ListButtonClicked(this);</OnClick>
-			<OnEnter>DuckWidget.ListBox.ListButtonHover(this,true);</OnEnter>
-			<OnLeave>DuckWidget.ListBox.ListButtonHover(this,nil);</OnLeave>
+			<OnClick>DuckWidget.ListBox.ListButtonClicked(self);</OnClick>
+			<OnEnter>DuckWidget.ListBox.ListButtonHover(self,true);</OnEnter>
+			<OnLeave>DuckWidget.ListBox.ListButtonHover(self,nil);</OnLeave>
 		</Scripts>
 	</CheckButton>
 
@@ -101,12 +101,12 @@
 		</Frames>
 		<Scripts>
 			<OnLoad>
-				this.DMEntries=0;
-				this.defaultSort=true;
-				DuckWidget.ListBox.SetFuncs(this);
+				self.DMEntries=0;
+				self.defaultSort=true;
+				DuckWidget.ListBox.SetFuncs(self);
 			</OnLoad>
-			<OnMouseWheel>DuckWidget.MouseWheel(_G[this:GetName().."_Scroll"]);</OnMouseWheel>
-			<OnScrollRangeChanged>ScrollFrame_OnScrollRangeChanged(arg2);</OnScrollRangeChanged>
+			<OnMouseWheel>DuckWidget.MouseWheel(_G[self:GetName().."_Scroll"],delta);</OnMouseWheel>
+			<OnScrollRangeChanged>ScrollFrame_OnScrollRangeChanged(self);</OnScrollRangeChanged>
 		</Scripts>
 	</Frame>
 
@@ -136,8 +136,8 @@
 		</Layers>
 		<FontString inherits="GameFontNormal"/>
 		<Scripts>
-			<OnLoad>this:SetTextInsets(3,2,0,0);</OnLoad>
-			<OnEscapePressed>this:ClearFocus();</OnEscapePressed>
+			<OnLoad>self:SetTextInsets(3,2,0,0);</OnLoad>
+			<OnEscapePressed>self:ClearFocus();</OnEscapePressed>
 		</Scripts>
 	</EditBox>
 </Ui>

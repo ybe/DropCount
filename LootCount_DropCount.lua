@@ -1,5 +1,5 @@
 --[[****************************************************************
-	LootCount DropCount v0.82
+	LootCount DropCount v1.00
 
 	Author: Evil Duck
 	****************************************************************
@@ -9,6 +9,7 @@
 
 	****************************************************************]]
 
+-- 1.00 WoW 4
 -- 0.82 fixed a bug in "DB.Purge", included correct database
 -- 0.80 separated instance and world drop areas, changed quest faction
 --      to player faction, less memory-intentsive at DB.Write, time-sliced
@@ -75,13 +76,11 @@
 -- Orb of Grishnath (it's not a drop at all)
 
 
-LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v0.82";
+LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v1.00";
 LOOTCOUNT_DROPCOUNT = "DropCount";
 SLASH_DROPCOUNT1 = "/dropcount";
 SLASH_DROPCOUNT2 = "/lcdc";
 local DuckLib=DuckMod[2.02];
-
-local cataclysm=nil;
 
 
 --DropCount={
@@ -98,10 +97,12 @@ local DropCount={
 	Com={},
 	LootCount={},
 	Tooltip={},
+	TooltipExtras={},
 	Event={},
 	Edit={},
 	OnUpdate={},
 	Hook={},
+	Font={},
 	Icons={
 		MakeMM={},
 		MakeWM={},
@@ -217,6 +218,10 @@ local CONST={
 	SEP2="\2",
 	SEP3="\3",
 	BURSTSIZE=0.5,
+	FONT={
+		NORM=nil,
+		SMALL=nil,
+	},
 };
 local COM={
 	PREFIX="LcDc",
@@ -365,25 +370,24 @@ local Astrolabe = DongleStub("Astrolabe-0.4");
 
 
 -- Set up for handling
-function DropCountXML:OnLoad()
-	if (not this) then cataclysm=true; end
-	this:RegisterEvent("ADDON_LOADED");
-	this:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
-	this:RegisterEvent("PLAYER_FOCUS_CHANGED");
-	this:RegisterEvent("PLAYER_TARGET_CHANGED");
-	this:RegisterEvent("CHAT_MSG_ADDON");
-	this:RegisterEvent("CHAT_MSG_CHANNEL");
-	this:RegisterEvent("LOOT_OPENED");
-	this:RegisterEvent("LOOT_SLOT_CLEARED");
-	this:RegisterEvent("MERCHANT_SHOW");
-	this:RegisterEvent("MERCHANT_CLOSED");
-	this:RegisterEvent("WORLD_MAP_UPDATE");
-	this:RegisterEvent("ZONE_CHANGED_NEW_AREA");
-	this:RegisterEvent("QUEST_DETAIL");
-	this:RegisterEvent("QUEST_COMPLETE");
-	this:RegisterEvent("QUEST_FINISHED");
-	this:RegisterEvent("UNIT_SPELLCAST_START");
-	this:RegisterEvent("QUEST_QUERY_COMPLETE");
+function DropCountXML:OnLoad(frame)
+	frame:RegisterEvent("ADDON_LOADED");
+	frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
+	frame:RegisterEvent("PLAYER_FOCUS_CHANGED");
+	frame:RegisterEvent("PLAYER_TARGET_CHANGED");
+	frame:RegisterEvent("CHAT_MSG_ADDON");
+	frame:RegisterEvent("CHAT_MSG_CHANNEL");
+	frame:RegisterEvent("LOOT_OPENED");
+	frame:RegisterEvent("LOOT_SLOT_CLEARED");
+	frame:RegisterEvent("MERCHANT_SHOW");
+	frame:RegisterEvent("MERCHANT_CLOSED");
+	frame:RegisterEvent("WORLD_MAP_UPDATE");
+	frame:RegisterEvent("ZONE_CHANGED_NEW_AREA");
+	frame:RegisterEvent("QUEST_DETAIL");
+	frame:RegisterEvent("QUEST_COMPLETE");
+	frame:RegisterEvent("QUEST_FINISHED");
+	frame:RegisterEvent("UNIT_SPELLCAST_START");
+	frame:RegisterEvent("QUEST_QUERY_COMPLETE");
 
 	local name;
 	name=GetSpellInfo(8613); CONST.PROFESSIONS[1]=name;	-- Skinning
@@ -407,6 +411,10 @@ function DropCountXML:OnLoad()
 	DropCount.Menu.Minimap=CreateFrame("Frame","DropCount_Menu_Minimap_Frame",Minimap,"UIDropDownMenuTemplate");
 	DropCount.Menu.Minimap:SetPoint("LEFT",Minimap);
 	UIDropDownMenu_Initialize(DropCount.Menu.Minimap,DropCountXML.Menu.MinimapInitialise,"MENU");
+
+	DropCount.TooltipExtras:SetFunctions(GameTooltip);
+	DropCount.TooltipExtras:SetFunctions(LootCount_DropCount_TT);
+	DropCount.TooltipExtras:SetFunctions(LootCount_DropCount_CF);
 
 	DuckLib:Init();
 end
@@ -453,7 +461,7 @@ function DropCountXML.Slasher(msg)
 			DropCount:VendorsForItem();
 		else
 			if (not string.find(DropCount.Search.Item,"item:",1,true)) then	-- Not ID, not link, assume name
-				DropCount.Search.Item=DropCount:ItemByName(DropCount.Search.Item);
+				DropCount.Search.Item=DropCount:VendorItemByName(DropCount.Search.Item);
 				if (not DropCount.Search.Item) then				-- Can't find by name
 					DuckLib:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_RED.."Information not available for this item. A link or itemID is required.");
 					DropCount.Search.Item=nil;
@@ -477,7 +485,7 @@ function DropCountXML.Slasher(msg)
 			DropCount:AreaForItem();
 		else
 			if (not DropCount.Search.mobItem:find("item:",1,true)) then	-- Not ID, not link, assume name
-				DropCount.Search.mobItem=DropCount:ItemByName(DropCount.Search.mobItem);
+				DropCount.Search.mobItem=DropCount:VendorItemByName(DropCount.Search.mobItem);
 				if (not DropCount.Search.mobItem) then				-- Can't find by name
 					DuckLib:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_RED.."Information not available for this item. A link or itemID is required.");
 					DropCount.Search.mobItem=nil;
@@ -608,16 +616,16 @@ function DropCount.Edit:Quest(p)
 	end
 end
 
-function DropCount.Event.COMBAT_LOG_EVENT_UNFILTERED()
-	if (arg2=="PARTY_KILL" and (bit.band(arg3,COMBATLOG_OBJECT_TYPE_PET) or bit.band(arg3,COMBATLOG_OBJECT_TYPE_PLAYER))) then
+function DropCount.Event.COMBAT_LOG_EVENT_UNFILTERED(_,how,source,_,_,GUID,mob)
+	if (how=="PARTY_KILL" and (bit.band(source,COMBATLOG_OBJECT_TYPE_PET) or bit.band(source,COMBATLOG_OBJECT_TYPE_PLAYER))) then
 		if (GetNumPartyMembers()<1) then
-			DropCount:AddKill(true,arg6,arg7,LootCount_DropCount_Character.Skinning);
+			DropCount:AddKill(true,GUID,mob,LootCount_DropCount_Character.Skinning);
 		end
 		if (DropCount.Registered) then LootCountAPI.Force(LOOTCOUNT_DROPCOUNT); end
 	end
 end
 
-function DropCount.Event.PLAYER_FOCUS_CHANGED() DropCount.Event.PLAYER_TARGET_CHANGED(); end
+function DropCount.Event.PLAYER_FOCUS_CHANGED(...) DropCount.Event.PLAYER_TARGET_CHANGED(...); end
 function DropCount.Event.PLAYER_TARGET_CHANGED()
 	local targettype=DropCount:GetTargetType();
 	if (not targettype) then
@@ -691,16 +699,16 @@ function DropCount.Event.LOOT_OPENED()
 	end
 end
 
-function DropCount.Event.CHAT_MSG_ADDON()
-	if (arg1~=COM.PREFIX) then return; end
+function DropCount.Event.CHAT_MSG_ADDON(prefix,text,channel,sender)
+	if (prefix~=COM.PREFIX) then return; end
 	if (LootCount_DropCount_DB.RAID) then
-		if (arg3~="RAID" and arg3~="PARTY") then return; end
+		if (channel~="RAID" and channel~="PARTY") then return; end
 	elseif (LootCount_DropCount_DB.GUILD) then
-		if (arg3~="GUILD") then return; end
+		if (channel~="GUILD") then return; end
 	else return; end
 
-	if (arg4==UnitName("player")) then return; end
-	DropCount.Com:ParseMessage(arg2,arg4);
+	if (sender==UnitName("player")) then return; end
+	DropCount.Com:ParseMessage(text,sender);
 end
 
 function DropCount.Event.MERCHANT_SHOW()
@@ -765,12 +773,12 @@ function DropCount.Event.QUEST_FINISHED()		-- Also when frame is closed (apparen
 	LCDC_RescanQuests=CONST.RESCANQUESTS;
 end
 
-function DropCount.Event.UNIT_SPELLCAST_START()
-	if (arg1~="player") then return; end		-- Someone else in party
-	if (arg2==CONST.PROFESSIONS[1] or arg2==CONST.PROFESSIONS[2] or
-		arg2==CONST.PROFESSIONS[3] or arg2==CONST.PROFESSIONS[4]) then
+function DropCount.Event.UNIT_SPELLCAST_START(name,spell)
+	if (name~="player") then return; end		-- Someone else in party
+	if (spell==CONST.PROFESSIONS[1] or spell==CONST.PROFESSIONS[2] or
+		spell==CONST.PROFESSIONS[3] or spell==CONST.PROFESSIONS[4]) then
 		if (DropCount.Target.Skin) then			-- Casting on a skinning-target
-			DropCount.Profession=arg2;			-- Set loot-by-profession type
+			DropCount.Profession=spell;			-- Set loot-by-profession type
 		end
 	else
 		DropCount.Profession=nil;			-- Set normal type loot
@@ -784,13 +792,13 @@ function DropCount.Event.QUEST_QUERY_COMPLETE()
 end
 
 -- An event has been received
-function DropCountXML:OnEvent(event,...)
+function DropCountXML:OnEvent(dummyself,event,...)
 	if (DropCount.Event[event]) then DropCount.Event[event](...); return; end
 	local frame,index=...;
-	frame=arg1;			-- until cataclysm
-	index=arg2;			-- until cataclysm
+--	frame=arg1;			-- until cataclysm
+--	index=arg2;			-- until cataclysm
 
-	if (event=="ADDON_LOADED" and arg1=="LootCount_DropCount") then
+	if (event=="ADDON_LOADED" and frame=="LootCount_DropCount") then
 		DropCount.Hook.TT_SetBagItem=GameTooltip.SetBagItem; GameTooltip.SetBagItem=DropCount.Hook.SetBagItem;
 		if (LootCount_DropCount_Character.ShowZoneMobs==nil) then LootCount_DropCount_Character.ShowZoneMobs=false; end
 		if (LootCount_DropCount_Character.ShowZone==nil) then LootCount_DropCount_Character.ShowZone=true; end
@@ -829,7 +837,7 @@ function DropCountXML:OnEvent(event,...)
 			GameTooltip:SetText(entry.Tooltip[1]);
 			local i=2;
 			while(entry.Tooltip[i]) do
-				GameTooltip:AddLine(entry.Tooltip[i],.6,.6,1,0);	-- 1=wrap text
+				GameTooltip:LCAddLine(entry.Tooltip[i],.6,.6,1,0);	-- 1=wrap text
 				i=i+1;
 			end
 
@@ -843,10 +851,10 @@ function DropCountXML:OnEvent(event,...)
 						if (test:find(LCDC_VendorSearch.SearchTerm)) then
 							if (not found) then
 								found=true;
-								GameTooltip:AddLine(" ",1,1,1,0);
-								GameTooltip:AddLine("Matches:",1,1,1,0);
+								GameTooltip:LCAddLine(" ",1,1,1,0);
+								GameTooltip:LCAddLine("Matches:",1,1,1,0);
 							end
-							GameTooltip:AddLine("    "..iTable.Name,1,1,1,0);
+							GameTooltip:LCAddLine("    "..iTable.Name,1,1,1,0);
 						end
 					end
 				end
@@ -861,10 +869,10 @@ function DropCountXML:OnEvent(event,...)
 					if (useit) then
 						if (not found) then
 							found=true;
-							GameTooltip:AddLine(" ",1,1,1,0);
-							GameTooltip:AddLine("Matches:",1,1,1,0);
+							GameTooltip:LCAddLine(" ",1,1,1,0);
+							GameTooltip:LCAddLine("Matches:",1,1,1,0);
 						end
-						GameTooltip:AddDoubleLine("     "..iTable.Quest,iTable.Header,1,1,1,1,1,1);
+						GameTooltip:LCAddDoubleLine("     "..iTable.Quest,iTable.Header,1,1,1,1,1,1);
 					end
 				end
 			end
@@ -908,9 +916,9 @@ function DropCount.Hook:AddLocationData(frame,item)
 		if (iData) then
 			local text="|cFFF89090B|cFFF09098e|cFFE890A0s|cFFE090A8t |cFFD890B0k|cFFD090B8n|cFFC890C0o|cFFC090C8w|cFFB890D0n |cFFB090D8a|cFFA890E0r|cFFA090E8e|cFF9890F0a: |cFF9090F8";
 			if (iData.BestW) then
-				frame:AddLine(text..iData.BestW.Location.." at "..iData.BestW.Score.."%",.6,.6,1,1);	-- 1=wrap text
+				frame:LCAddLine(text..iData.BestW.Location.." at "..iData.BestW.Score.."%",.6,.6,1,1);	-- 1=wrap text
 			elseif (iData.Best) then
-				frame:AddLine(text..iData.Best.Location.." at "..iData.Best.Score.."%",.6,.6,1,1);	-- 1=wrap text
+				frame:LCAddLine(text..iData.Best.Location.." at "..iData.Best.Score.."%",.6,.6,1,1);	-- 1=wrap text
 			end
 		end
 		frame:Show();
@@ -1164,12 +1172,30 @@ function DropCount:ScanQuests()
 	while (GetQuestLogTitle(i)~=nil) do
 		local questTitle,level,questTag,suggestedGroup,isHeader,isCollapsed,isComplete,isDaily=GetQuestLogTitle(i);
 		if (not isHeader) then
+			SelectQuestLogEntry(i);
 			local link=GetQuestLink(i);
 			local questID,i1,i2=link:match("|Hquest:(%p?%d+):(%p?%d+)|h%[(.-)%]|h");
 			LootCount_DropCount_Character.Quests[questTitle]={
 				ID=tonumber(questID),
 				Header=lastheader,
 			};
+			local goal=GetNumQuestLeaderBoards();
+			if (goal and goal>0) then
+				LootCount_DropCount_Character.Quests[questTitle].Items={};
+				local peek,found=1,nil;
+				while(peek<=goal) do
+					local desc,oType,done=GetQuestLogLeaderBoard(peek);
+					if (oType=="item") then
+						local _,_,itemName,numItems,numNeeded=string.find(desc, "(.*):%s*([%d]+)%s*/%s*([%d]+)");
+						if (itemName) then
+							found=true;
+							LootCount_DropCount_Character.Quests[questTitle].Items[itemName]=tonumber(numNeeded);
+						end
+					end
+					peek=peek+1;
+				end
+				if (not found) then LootCount_DropCount_Character.Quests[questTitle].Items=nil; end
+			end
 		else
 			lastheader=questTitle;
 		end
@@ -1177,6 +1203,19 @@ function DropCount:ScanQuests()
 	end
 	if (not DropCount.SpoolQuests) then DropCount.SpoolQuests={}; end
 	DropCount.SpoolQuests=DuckLib:CopyTable(LootCount_DropCount_Character.Quests,DropCount.SpoolQuests);
+
+	for quest,qData in pairs(LootCount_DropCount_Character.Quests) do
+		if (qData.Items) then
+			for item,amount in pairs(qData.Items) do
+				local iData,iLink=DropCount.DB.Item:ReadByName(item);
+				if (iData) then
+					if (not iData.Quest) then iData.Quest={}; end
+					iData.Quest[quest]=amount;
+					DropCount.DB.Item:Write(iLink,iData);
+				end
+			end
+		end
+	end
 end
 
 function DropCount:WalkQuests()
@@ -1361,11 +1400,11 @@ function DropCount.Icons:Plot()
 	end
 end
 
-function DropCountXML:OnEnterIcon()
+function DropCountXML:OnEnterIcon(frame)
 	LCDC_VendorFlag_Info=true;
-	if (this.Vendor) then DropCount.Tooltip:SetNPCContents(this.Vendor.Name); end
-	if (this.Book) then DropCount.Tooltip:Book(this.Book.Name,parent); end
-	if (this.NPC) then DropCount.Tooltip:QuestList(this.NPC.Faction,this.NPC.Name,parent); end
+	if (frame.Vendor) then DropCount.Tooltip:SetNPCContents(frame.Vendor.Name); end
+	if (frame.Book) then DropCount.Tooltip:Book(frame.Book.Name,parent); end
+	if (frame.NPC) then DropCount.Tooltip:QuestList(frame.NPC.Faction,frame.NPC.Name,parent); end
 end
 
 function DropCount:SetQuestMMPosition(npc,xPos,yPos)
@@ -1594,7 +1633,7 @@ function DropCount.Icons.MakeWM:Vendor(Cont,Zone)
 	end
 end
 
-function DropCount:ItemByName(name)
+function DropCount:VendorItemByName(name)
 	if (not LootCount_DropCount_DB.Vendor) then return nil; end
 	name=string.lower(name);
 	local vData;
@@ -1828,8 +1867,28 @@ function DropCount.DB.Item:Write(item,iData)
 			compact=compact..CONST.SEP2..iData.BestW.Location..CONST.SEP2..iData.BestW.Score
 		end
 	end
+	compact=compact..CONST.SEP1;
+	if (iData.Quest) then
+		local first=true;
+		for quest,amount in pairs(iData.Quest) do
+			if (not first) then compact=compact..CONST.SEP2; end
+			compact=compact..quest..CONST.SEP3..amount;
+			first=nil;
+		end
+	end
 	if (not LootCount_DropCount_DB.Item) then LootCount_DropCount_DB.Item={}; end
 	LootCount_DropCount_DB.Item[item]=compact;
+end
+
+function DropCount.DB.Item:ReadByName(name)
+	if (not LootCount_DropCount_DB.Item) then return nil; end
+
+	for item,iRaw in pairs(LootCount_DropCount_DB.Item) do
+		if (iRaw:find(name,1,true)==1) then
+			return self:Read(item),item;
+		end
+	end
+	return nil;
 end
 
 function DropCount.DB.Item:Read(item,base,KeepZero)
@@ -1858,8 +1917,8 @@ function DropCount.DB.Item:Read(item,base,KeepZero)
 		if (self.Fast.MD[item]) then wipe(self.Fast.MD[item]); else self.Fast.MD[item]={}; end
 		nData=self.Fast.MD[item];
 	else nData={}; end
-	local drop,skin;
-	nData.Item,nData.Time,drop,skin,best=strsplit(CONST.SEP1,base[item]);
+	local drop,skin,best,quest;
+	nData.Item,nData.Time,drop,skin,best,quest=strsplit(CONST.SEP1,base[item]);
 	nData.Time=tonumber(nData.Time);
 	if (drop and drop~="") then
 		nData.Name={};
@@ -1901,6 +1960,14 @@ function DropCount.DB.Item:Read(item,base,KeepZero)
 			nData.BestW.Score=tonumber(nData.BestW.Score);
 		else
 			nData.BestW=nil;
+		end
+	end
+	if (quest and quest~="") then
+		nData.Quest={};
+		quest={strsplit(CONST.SEP2,quest)};
+		for _,data in ipairs(quest) do
+			local qName,amount=strsplit(CONST.SEP3,data);
+			nData.Quest[qName]=tonumber(amount);
 		end
 	end
 
@@ -2564,7 +2631,7 @@ function DropCount.Tooltip:VendorList(button,getlist)
 		currentzone="";
 	elseif (LootCount_DropCount_Character.ShowZoneMobs) then
 		if (not getlist) then
-			GameTooltip:AddDoubleLine("Showing vendors from "..currentzone.." only","",0,1,1,0,1,1);
+			GameTooltip:LCAddDoubleLine("Showing vendors from "..currentzone.." only","",0,1,1,0,1,1);
 		end
 	end
 
@@ -2600,12 +2667,12 @@ function DropCount.Tooltip:VendorList(button,getlist)
 	list=DropCount:SortByNames(list);
 	if (getlist) then return DuckLib:CopyTable(list); end
 	if (line==1) then
-		GameTooltip:AddLine("No known vendors",1,1,1);
+		GameTooltip:LCAddLine("No known vendors",1,1,1);
 	else
 		-- Type list
 		line=1;
 		while(list[line]) do
-			GameTooltip:AddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
+			GameTooltip:LCAddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
 			line=line+1;
 		end
 	end
@@ -2666,19 +2733,19 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down,highlight)
 	if (not currentzone) then
 		currentzone="";
 	elseif (LootCount_DropCount_Character.ShowZoneMobs) then
-		GameTooltip:AddDoubleLine("Showing mobs from "..currentzone.." only","",0,1,1,0,1,1);
+		GameTooltip:LCAddDoubleLine("Showing mobs from "..currentzone.." only","",0,1,1,0,1,1);
 	end
 	local iTable=DropCount.DB.Item:Read(button.User.itemID);
 	local skinningdrop=iTable.Skinning;
 	local normaldrop=iTable.Name;
 	if (skinningdrop) then
-		if (normaldrop) then GameTooltip:AddDoubleLine("Loot and |cFFFF00FFprofession","",1,1,1,1,1,1);
-		else GameTooltip:AddDoubleLine("Profession","",1,0,1,1,0,1); end
+		if (normaldrop) then GameTooltip:LCAddDoubleLine("Loot and |cFFFF00FFprofession","",1,1,1,1,1,1);
+		else GameTooltip:LCAddDoubleLine("Profession","",1,0,1,1,0,1); end
 	end
 	if (iTable.Best) then
-		GameTooltip:AddDoubleLine("Best drop-area:",DropCount:Highlight(iTable.Best.Location,highlight).." ("..iTable.Best.Score..")",0,1,1,0,1,1);
+		GameTooltip:LCAddDoubleLine("Best drop-area:",DropCount:Highlight(iTable.Best.Location,highlight).." ("..iTable.Best.Score..")",0,1,1,0,1,1);
 		if (iTable.BestW) then
-			GameTooltip:AddDoubleLine(" ",DropCount:Highlight(iTable.BestW.Location,highlight).." ("..iTable.BestW.Score..")",0,1,1,0,1,1);
+			GameTooltip:LCAddDoubleLine(" ",DropCount:Highlight(iTable.BestW.Location,highlight).." ("..iTable.BestW.Score..")",0,1,1,0,1,1);
 		end
 	end
 
@@ -2802,7 +2869,7 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down,highlight)
 	line=1;
 	while(list[line]) do
 		if ((count<goal and list[line].Count>=limit) or list[line].Show) then
-			GameTooltip:AddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
+			GameTooltip:LCAddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
 			if (not list[line].Show) then count=count+1; end	-- Count all normal entries
 		else
 			if (list[line].Count<limit) then lowKill=lowKill+1; end
@@ -2838,7 +2905,7 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down,highlight)
 	DropCount.Tracker.MobList.button=nil;
 
 	if (supressed>0) then
-		GameTooltip:AddDoubleLine(supressed.." more entries","",1,.5,1,1,1,1);
+		GameTooltip:LCAddDoubleLine(supressed.." more entries","",1,.5,1,1,1,1);
 	end
 
 	GameTooltip:Show();
@@ -2950,7 +3017,7 @@ function DropCount.Tooltip:QuestList(faction,npc,parent,frame)
 		quest=qData.Quest; header=qData.Header;
 		if (not header) then header=""; end
 		local _,colour=DropCount:GetQuestStatus(quest);
-		frame:AddDoubleLine("  "..colour..quest,colour..header,1,1,1,1,1,1);
+		frame:LCAddDoubleLine("  "..colour..quest,colour..header,1,1,1,1,1,1);
 	end
 	frame:Show();
 end
@@ -2976,8 +3043,8 @@ function DropCount.Tooltip:Book(book,parent)
 	if (not parent) then parent=UIParent; end
 	LootCount_DropCount_TT:SetOwner(parent,"ANCHOR_CURSOR");
 	LootCount_DropCount_TT:SetText("Book");
-	LootCount_DropCount_TT:AddLine(book,1,1,1);
-	LootCount_DropCount_TT:AddLine(bStatus,1,1,1);
+	LootCount_DropCount_TT:LCAddLine(book,1,1,1);
+	LootCount_DropCount_TT:LCAddLine(bStatus,1,1,1);
 	LootCount_DropCount_TT:Show();
 end
 
@@ -3032,8 +3099,8 @@ function DropCount.Tooltip:SetNPCContents(unit,parent,frame,force)
 		end
 	end
 	if (missingitems>0) then
-		frame:AddDoubleLine("Missing "..missingitems.." items.","",1,0,0,0,0,0);
-		frame:AddDoubleLine("Loading...","",1,0,0,0,0,0);
+		frame:LCAddDoubleLine("Missing "..missingitems.." items.","",1,0,0,0,0,0);
+		frame:LCAddDoubleLine("Loading...","",1,0,0,0,0,0);
 		frame:Show();
 		frame.Loading=true;
 		return;
@@ -3044,7 +3111,7 @@ function DropCount.Tooltip:SetNPCContents(unit,parent,frame,force)
 	list=DropCount:SortByNames(list);
 	line=1;
 	while(list[line]) do
-		frame:AddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
+		frame:LCAddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
 		line=line+1;
 	end
 	frame:Show();
@@ -3063,61 +3130,55 @@ function DropCount:SetLootlist(unit,AltTT)
 	local text="";
 	local mTable=DropCount.DB.Count:Read(unit);
 	if (mTable.Skinning and mTable.Skinning>0) then text="Profession-loot: "..mTable.Skinning.." times"; end
-	AltTT:AddDoubleLine(mTable.Kill.." kills",text,.4,.4,1,1,0,1);
+	AltTT:LCAddDoubleLine(mTable.Kill.." kills",text,.4,.4,1,1,0,1);
 
 	local list={};
 	local line=1;
 	local missingitems=0;
 	local itemsinlist=nil;
 	for item,iData in pairs(LootCount_DropCount_DB.Item) do
-		if (string.find(iData,unit,1,true)) then		-- Plain search
+		if (iData:find(unit,1,true)) then		-- Plain search
 			local iTable=DropCount.DB.Item:Read(item);
-			if (iTable.Name) then
-				for mob,mTable in pairs(iTable.Name) do
-					if (mob==unit) then
-						local itemname,_,rarity,_,_,itemtype=GetItemInfo(item);
-						local questitem=nil;
-						if (CONST.QUESTID) then
-							if (itemtype and itemtype==CONST.QUESTID and not LootCount_DropCount_NoQuest[itemID]) then
-								questitem=true;
-							end
-						end
-						if (not itemname or not rarity) then
-							DropCount.Cache:AddItem(item);
-							missingitems=missingitems+1;
-						elseif (LootCount_DropCount_Character.ShowSingle or mTable~=1 or questitem) then
-							local _,_,_,colour=GetItemQualityColor(rarity);
-							local thisratio,_,thissafe=DropCount:GetRatio(item,mob);
-							list[line]={ Ltext=colour.."["..itemname.."]|r: ", ratio=thisratio, NoSafe=thissafe };
-							line=line+1;
-							itemsinlist=true;
-						end
+			if (iTable.Name and iTable.Name[unit]) then
+				local itemname,_,rarity,_,_,itemtype=GetItemInfo(item);
+				local questitem=nil;
+				if (CONST.QUESTID) then
+					if (itemtype and itemtype==CONST.QUESTID and not LootCount_DropCount_NoQuest[itemID]) then
+						questitem=true;
 					end
 				end
+				if (not itemname or not rarity) then
+					DropCount.Cache:AddItem(item);
+					missingitems=missingitems+1;
+				elseif (LootCount_DropCount_Character.ShowSingle or questitem or iTable.Name[unit]~=1) then
+					local _,_,_,colour=GetItemQualityColor(rarity);
+					local thisratio,_,thissafe=DropCount:GetRatio(item,unit);
+					list[line]={ Ltext=colour.."["..itemname.."]|r: ", ratio=thisratio, NoSafe=thissafe };
+					if (iTable.Quest) then list[line].Quests=DuckLib:CopyTable(iTable.Quest); end
+					line=line+1;
+					itemsinlist=true;
+				end
 			end
-			if (iTable.Skinning) then
-				for mob,mTable in pairs(iTable.Skinning) do
-					if (mob==unit) then
-						local itemname,_,rarity=GetItemInfo(item);
-						if (not itemname or not rarity) then
-							DropCount.Cache:AddItem(item);
-							missingitems=missingitems+1;
-						else
-							local _,_,_,colour=GetItemQualityColor(rarity);
-							local _,thisratio,thissafe=DropCount:GetRatio(item,mob);
-							list[line]={ Ltext=colour.."["..itemname.."]|r: ", ratio=thisratio, NoSafe=thissafe };
-							list[line].Ltext="|cFFFF00FF*|r "..list[line].Ltext;	-- AARRGGBB
-							line=line+1;
-							itemsinlist=true;
-						end
-					end
+			if (iTable.Skinning and iTable.Skinning[unit]) then
+				local itemname,_,rarity=GetItemInfo(item);
+				if (not itemname or not rarity) then
+					DropCount.Cache:AddItem(item);
+					missingitems=missingitems+1;
+				else
+					local _,_,_,colour=GetItemQualityColor(rarity);
+					local _,thisratio,thissafe=DropCount:GetRatio(item,unit);
+					list[line]={ Ltext=colour.."["..itemname.."]|r: ", ratio=thisratio, NoSafe=thissafe };
+					list[line].Ltext="|cFFFF00FF*|r "..list[line].Ltext;	-- AARRGGBB
+					if (iData.Quest) then list[line].Quests=DuckLib:CopyTable(iData.Quest); end
+					line=line+1;
+					itemsinlist=true;
 				end
 			end
 		end
 	end
 	if (missingitems>0) then
-		AltTT:AddDoubleLine("Missing "..missingitems.." items.","",1,0,0,0,0,0);
-		AltTT:AddDoubleLine("Loading...","",1,0,0,0,0,0);
+		AltTT:LCAddDoubleLine("Missing "..missingitems.." items.","",1,0,0,0,0,0);
+		AltTT:LCAddDoubleLine("Loading...","",1,0,0,0,0,0);
 		AltTT:Show();
 		AltTT.Loading=true;
 		return;
@@ -3128,10 +3189,54 @@ function DropCount:SetLootlist(unit,AltTT)
 	list=DropCount:SortByRatio(list);
 	line=1;
 	while(list[line]) do
-		AltTT:AddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
+		AltTT:LCAddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
+		if (list[line].Quests) then
+			for quest,amount in pairs(list[line].Quests) do
+				if (LootCount_DropCount_DB.Quest and LootCount_DropCount_DB.Quest[CONST.MYFACTION]) then
+					for npc,rawData in pairs(LootCount_DropCount_DB.Quest[CONST.MYFACTION]) do
+						if (rawData:find(quest,1,true)) then
+							local qData=DropCount.DB.Quest:Read(CONST.MYFACTION,npc);
+							if (qData.Quests) then
+								for _,qListData in ipairs(qData.Quests) do
+									if (qListData.Quest==quest) then
+										AltTT:LCAddSmallLine("      "..amount.." for "..quest.." ("..qListData.Header..")",.5,.3,.2);
+										AltTT:LCAddSmallLine(DuckLib.Color.Yellow.."      ! |r"..npc.." ("..qData.Zone.." - "..math.floor(qData.X)..","..math.floor(qData.Y)..")",.5,.3,.2);
+									end
+								end
+							end
+						end
+					end
+				end
+			end
+		end
 		line=line+1;
 	end
 	AltTT:Show();
+end
+
+function DropCount.TooltipExtras:SetFunctions(widget)
+	widget.LCAddLine=DropCount.TooltipExtras.AddLine
+	widget.LCAddDoubleLine=DropCount.TooltipExtras.AddDoubleLine
+	widget.LCAddSmallLine=DropCount.TooltipExtras.AddSmallLine
+	widget:AddLine("1"); widget:AddLine("2");
+	widget.LCFont,widget.LCSize,widget.LCFlags=_G[widget:GetName().."TextLeft"..widget:NumLines()]:GetFont();
+--DuckLib:Chat("NORM: "..widget.LCSize);
+end
+
+function DropCount.TooltipExtras:AddLine(text,r,g,b,a)
+	self:AddLine(text,r,g,b,a);
+	_G[self:GetName().."TextLeft"..self:NumLines()]:SetFont(self.LCFont,self.LCSize,self.LCFlags);
+end
+
+function DropCount.TooltipExtras:AddSmallLine(text,r,g,b,a)
+	self:AddLine(text,r,g,b,a);
+	_G[self:GetName().."TextLeft"..self:NumLines()]:SetFont(self.LCFont,self.LCSize*.75,self.LCFlags);
+end
+
+function DropCount.TooltipExtras:AddDoubleLine(textL,textR,rL,gL,bL,rR,gR,bR)
+	self:AddDoubleLine(textL,textR,rL,gL,bL,rR,gR,bR);
+	_G[self:GetName().."TextLeft"..self:NumLines()]:SetFont(self.LCFont,self.LCSize,self.LCFlags);
+	_G[self:GetName().."TextRight"..self:NumLines()]:SetFont(self.LCFont,self.LCSize,self.LCFlags);
 end
 
 function DropCount.Cache:AddItem(item)
@@ -3350,15 +3455,15 @@ function DropCount.Menu.ToggleZone()
 	else LootCount_DropCount_Character.ShowZone=true; end
 end
 
-function DropCount.Menu.ToggleQuestItem()
-	if (LootCount_DropCount_NoQuest[this.value]) then LootCount_DropCount_NoQuest[this.value]=nil; return; end
-	LootCount_DropCount_NoQuest[this.value]=true;
+function DropCount.Menu.ToggleQuestItem(frame)
+	if (LootCount_DropCount_NoQuest[frame.value]) then LootCount_DropCount_NoQuest[frame.value]=nil; return; end
+	LootCount_DropCount_NoQuest[frame.value]=true;
 end
 
-function DropCount.Menu.ToggleChannel()
-	if (LootCount_DropCount_DB[this.value]) then LootCount_DropCount_DB[this.value]=nil; else LootCount_DropCount_DB[this.value]=true; end
-	if (this.value=="GUILD") then LootCount_DropCount_DB.RAID=nil; end
-	if (this.value=="RAID") then LootCount_DropCount_DB.GUILD=nil; end
+function DropCount.Menu.ToggleChannel(frame)
+	if (LootCount_DropCount_DB[frame.value]) then LootCount_DropCount_DB[frame.value]=nil; else LootCount_DropCount_DB[frame.value]=true; end
+	if (frame.value=="GUILD") then LootCount_DropCount_DB.RAID=nil; end
+	if (frame.value=="RAID") then LootCount_DropCount_DB.GUILD=nil; end
 end
 
 function DropCount.LootCount.MenuSetGoal()
@@ -3481,7 +3586,7 @@ function DropCount:SaveBook(BookName,bZone,bX,bY)
 	return newBook,updatedBook;
 end
 
-function DropCountXML:OnUpdate(elapsed)
+function DropCountXML:OnUpdate(frame,elapsed)
 	if (not DropCount.Loaded) then return; end
 
 	DropCount.Update=DropCount.Update+elapsed;
@@ -4544,22 +4649,22 @@ function DropCount.Menu.OpenSearchWindow()
 end
 
 --[[    Minimap icon stuff    ]]
-function DropCountXML.MinimapOnEnter()
-	GameTooltip:SetOwner(this,"ANCHOR_LEFT");
+function DropCountXML.MinimapOnEnter(frame)
+	GameTooltip:SetOwner(frame,"ANCHOR_LEFT");
 	GameTooltip:SetText("DropCount");
 	GameTooltipTextLeft1:SetTextColor(0,1,0);
-	GameTooltip:AddLine(LOOTCOUNT_DROPCOUNT_VERSIONTEXT);
-	GameTooltip:AddLine(CONST.C_BASIC.."<Left-click>|r for menu");
-	GameTooltip:AddLine(CONST.C_BASIC.."<Right-click>|r and drag to move");
-	GameTooltip:AddLine(CONST.C_BASIC.."<Shift-right-click>|r and drag for free-move");
+	GameTooltip:LCAddLine(LOOTCOUNT_DROPCOUNT_VERSIONTEXT);
+	GameTooltip:LCAddLine(CONST.C_BASIC.."<Left-click>|r for menu");
+	GameTooltip:LCAddLine(CONST.C_BASIC.."<Right-click>|r and drag to move");
+	GameTooltip:LCAddLine(CONST.C_BASIC.."<Shift-right-click>|r and drag for free-move");
 	if (DropCount.Registered) then
-		GameTooltip:AddLine(CONST.C_BASIC.."LootCount: "..CONST.C_GREEN.."Present");
+		GameTooltip:LCAddLine(CONST.C_BASIC.."LootCount: "..CONST.C_GREEN.."Present");
 	end
 	GameTooltip:Show();
 end
 
-function DropCountXML.MinimapOnClick()
-	ToggleDropDownMenu(1,nil,DropCount.Menu.Minimap,this:GetParent(),0,0);
+function DropCountXML.MinimapOnClick(frame)
+	ToggleDropDownMenu(1,nil,DropCount.Menu.Minimap,frame:GetParent(),0,0);
 end
 
 -- Thanks to Yatlas and Gello for the initial code

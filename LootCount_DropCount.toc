@@ -1,4 +1,4 @@
-## Interface: 30300
+## Interface: 40000
 ## Title: LootCount |cFF9900FFDrop-rate|r
 ## Notes: LootCount Drop-rate counter
 ## DefaultState: Enabled

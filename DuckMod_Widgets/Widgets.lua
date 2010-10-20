@@ -20,13 +20,13 @@ if (DuckMod_Widgets_Version<1) then				-- This version
 -- o The main use for this is when a pane has other items in it that
 --   may receive it in stead. They may then call this function with
 --   their parent as an argument.
-function DuckWidget.MouseWheel(slider)
-	if (not slider) then slider=this; end
+function DuckWidget.MouseWheel(slider,delta)
+	if (not slider) then return; end
 	local min,max=slider:GetMinMaxValues(); if (not min or not max) then return; end
 	local step=slider:GetValueStep(); if (not step) then return; end
 	local value=slider:GetValue(); if (not value) then return; end
-	if (arg1==1 and (value-step)>=min) then slider:SetValue(value-step);
-	elseif (arg1==-1 and (value+step)<=max) then slider:SetValue(value+step); end
+	if (delta==1 and (value-step)>=min) then slider:SetValue(value-step);
+	elseif (delta==-1 and (value+step)<=max) then slider:SetValue(value+step); end
 end
 
 -- Some helpers to get past later updates to the WoW code
@@ -183,8 +183,8 @@ function DuckWidget.ListBox.SliderChanged(frame)
 	DuckWidget.ListBox.Redraw(frame);
 end
 
-function DuckWidget.ListBox.SetSelectionChanged(self,func)
-	this.DM.SelectionChanged=func;
+function DuckWidget.ListBox.SetSelectionChanged(frame,func)
+	frame.DM.SelectionChanged=func;
 end
 
 function DuckWidget.ListBox.SendEvent(button,event)
@@ -194,9 +194,9 @@ function DuckWidget.ListBox.SendEvent(button,event)
 	local index=tonumber(button:GetName():sub(button:GetName():find("%d+$")));	-- Last number in name
 	index=(index-1)+_G[button:GetParent():GetName().."_Scroll"]:GetValue();	-- Button -> contents
 --	DEFAULT_CHAT_FRAME:AddMessage(index,1,0,0);
-	arg1=button:GetParent();	-- until cataclysm
-	arg2=index;					-- until cataclysm
-	handler(this,event,button:GetParent(),index);
+--	arg1=button:GetParent();	-- until cataclysm
+--	arg2=index;					-- until cataclysm
+	handler(button,event,button:GetParent(),index);
 end
 
 function DuckWidget.ListBox.ListButtonClicked(button)

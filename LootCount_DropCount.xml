@@ -4,9 +4,9 @@
 	<GameTooltip name="LootCount_DropCount_CF" inherits="GameTooltipTemplate" parent="UIParent" hidden="true"/>
 	<Frame name="LootCount_DropCount_HiddenCacheFrame" visible="false">
 		<Scripts>
-			<OnLoad>DropCountXML:OnLoad();</OnLoad>
-			<OnEvent>DropCountXML:OnEvent(event);</OnEvent>
-			<OnUpdate>DropCountXML:OnUpdate(arg1);</OnUpdate>
+			<OnLoad>DropCountXML:OnLoad(self);</OnLoad>
+			<OnEvent>DropCountXML:OnEvent(self,event,...);</OnEvent>
+			<OnUpdate>DropCountXML:OnUpdate(self,elapsed);</OnUpdate>
 		</Scripts>
 	</Frame>
 
@@ -14,7 +14,7 @@
 		<Size><AbsDimension x="12" y="12" /></Size>
 		<NormalTexture name="$parentNormalTexture" file=""/>
 		<Scripts>
-			<OnEnter>DropCountXML:OnEnterIcon();</OnEnter>
+			<OnEnter>DropCountXML:OnEnterIcon(self);</OnEnter>
 			<OnLeave>ResetCursor();LootCount_DropCount_TT:Hide();LCDC_VendorFlag_Info=nil;</OnLeave>
 		</Scripts>
 	</Button>
@@ -48,12 +48,12 @@
 				</Layers>
 				<HighlightTexture alphaMode="ADD" file="Interface\Minimap\UI-Minimap-ZoomButton-Highlight"/>
 				<Scripts>
-					<OnLoad>this:RegisterForDrag("RightButton");this.dragme=false;</OnLoad>
-					<OnDragStart>this.dragme=true;</OnDragStart>
-					<OnDragStop>this.dragme=false;</OnDragStop>
-					<OnUpdate>if(this.dragme==true) then DropCountXML.MinimapBeingDragged(); end </OnUpdate>
-					<OnClick>DropCountXML.MinimapOnClick();</OnClick>
-					<OnEnter>DropCountXML.MinimapOnEnter();</OnEnter>
+					<OnLoad>self:RegisterForDrag("RightButton"); self.dragme=false;</OnLoad>
+					<OnDragStart>self.dragme=true;</OnDragStart>
+					<OnDragStop>self.dragme=false;</OnDragStop>
+					<OnUpdate>if (self.dragme==true) then DropCountXML.MinimapBeingDragged(); end </OnUpdate>
+					<OnClick>DropCountXML.MinimapOnClick(self);</OnClick>
+					<OnEnter>DropCountXML.MinimapOnEnter(self);</OnEnter>
 					<OnLeave>GameTooltip:Hide();</OnLeave>
 				</Scripts>
 			</Button>
@@ -89,7 +89,7 @@
 					<Anchor point="CENTER" relativeTo="$parent" relativePoint="TOPRIGHT"><Offset><AbsDimension x="-12" y="-12"/></Offset></Anchor>
 				</Anchors>
 				<Scripts>
-					<OnClick>this:GetParent():Hide();</OnClick>
+					<OnClick>self:GetParent():Hide();</OnClick>
 				</Scripts>
 			</Button>
 			<!--              XXXX xxxx  -->
@@ -169,7 +169,7 @@
 					</Anchor>
 				</Anchors>
 				<Scripts>
-					<OnEvent>DropCountXML:OnEvent(event,index)</OnEvent>
+					<OnEvent>DropCountXML:OnEvent(self,event,...)</OnEvent>
 				</Scripts>
 			</Frame>
 		</Frames>

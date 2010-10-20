@@ -24092,6 +24092,13 @@ LootCount_DropCount_RemoveData = {
 					}, -- [1]
 				},
 			},
+			["Sholazar Guardian"] = {
+				["Quests"] = {
+					{
+						["Quest"] = "A Timeworn Coffer",
+					}, -- [1]
+				},
+			},
 		},
 		["Alliance"] = {
 			["Leprous Servant"] = {},
@@ -24161,6 +24168,13 @@ LootCount_DropCount_RemoveData = {
 				["Quests"] = {
 					{
 						["Quest"] = "Pernicious Evidence",
+					}, -- [1]
+				},
+			},
+			["Sholazar Guardian"] = {
+				["Quests"] = {
+					{
+						["Quest"] = "A Timeworn Coffer",
 					}, -- [1]
 				},
 			},

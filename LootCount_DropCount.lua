@@ -4514,6 +4514,9 @@ function DropCount:MergeMOB(mob,strict)
 							miTable.Best={ Location=iTable.Best.Location, Score=iTable.Best.Score };
 						end
 					end
+					if (iTable.Quest) then			-- Merge quest data, if any
+						miTable.Quest=DuckLib:CopyTable(iTable.Quest,miTable.Quest);
+					end
 					DropCount.DB.Item:Write(item,miTable);				-- Copy item to target
 				end
 			end
@@ -4546,6 +4549,9 @@ function DropCount:MergeMOB(mob,strict)
 						if (store) then
 							miTable.Best={ Location=iTable.Best.Location, Score=iTable.Best.Score };
 						end
+					end
+					if (iTable.Quest) then			-- Merge quest data, if any
+						miTable.Quest=DuckLib:CopyTable(iTable.Quest,miTable.Quest);
 					end
 					DropCount.DB.Item:Write(item,miTable);				-- Copy item to target
 				end

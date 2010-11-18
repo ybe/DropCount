@@ -80,7 +80,7 @@ LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v1.00";
 LOOTCOUNT_DROPCOUNT = "DropCount";
 SLASH_DROPCOUNT1 = "/dropcount";
 SLASH_DROPCOUNT2 = "/lcdc";
-local DuckLib=DuckMod[2.02];
+local DuckLib=DuckMod[2.0201];
 
 
 --DropCount={
@@ -3267,7 +3267,7 @@ end
 
 function DropCount.LootCount:ToggleMenu(button)
 	DropCount.ThisBuffer=button;
-	ToggleDropDownMenu(nil,nil,LootCount_DropCount_MenuOptions,button,0,0);
+	ToggleDropDownMenu(1,nil,LootCount_DropCount_MenuOptions,button,0,0);
 end
 
 function DropCountXML:GUI_Search()
@@ -3412,6 +3412,9 @@ end
 
 function DropCountXML:BuildMenu(button)
 	DropCount.ThisBuffer=button;
+--	if (not LootCount_DropCount_MenuOptions) then
+--		LootCount_DropCount_MenuOptions=CreateFrame("Frame",nil,nil,"UIDropDownMenuTemplate");
+--	end
 	UIDropDownMenu_Initialize(LootCount_DropCount_MenuOptions,DropCountXML.MenuLoad,"MENU");
 end
 

@@ -24099,6 +24099,20 @@ LootCount_DropCount_RemoveData = {
 					}, -- [1]
 				},
 			},
+			["Innkeeper Gryshka"] = {
+				["Quests"] = {
+					{
+						["Quest"] = "The Refiner's Fire",
+					}, -- [1]
+				},
+			},
+			["- item - (The Storm Peaks - Frosthold 28,74)"] = {
+				["Quests"] = {
+					{
+						["Quest"] = "The Refiner's Fire",
+					}, -- [1]
+				},
+			},
 		},
 		["Alliance"] = {
 			["Leprous Servant"] = {},
@@ -24175,6 +24189,13 @@ LootCount_DropCount_RemoveData = {
 				["Quests"] = {
 					{
 						["Quest"] = "A Timeworn Coffer",
+					}, -- [1]
+				},
+			},
+			["- item - (The Storm Peaks - Frosthold 28,74)"] = {
+				["Quests"] = {
+					{
+						["Quest"] = "The Refiner's Fire",
 					}, -- [1]
 				},
 			},

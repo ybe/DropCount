@@ -4,7 +4,7 @@
 ## DefaultState: Enabled
 ## LoadOnDemand: 0
 ## Author: Evil Duck
-## SavedVariables: LootCount_DropCount_DB,LootCount_DropCount_NoQuest
+## SavedVariables: LootCount_DropCount_DB,LootCount_DropCount_NoQuest,LootCount_DropCount_Maps
 ## SavedVariablesPerCharacter: LootCount_DropCount_Character
 ## OptionalDeps: LootCount
 ##

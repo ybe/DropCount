@@ -6,7 +6,9 @@
 		<Scripts>
 			<OnLoad>DropCountXML:OnLoad(self);</OnLoad>
 			<OnEvent>DropCountXML:OnEvent(self,event,...);</OnEvent>
-			<OnUpdate>DropCountXML:OnUpdate(self,elapsed);</OnUpdate>
+			<OnUpdate>
+				DropCountXML:OnUpdate(self,elapsed);
+			</OnUpdate>
 		</Scripts>
 	</Frame>
 

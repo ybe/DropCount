@@ -1,5 +1,5 @@
 --[[****************************************************************
-	LootCount DropCount v1.00
+	LootCount DropCount v1.20
 
 	Author: Evil Duck
 	****************************************************************
@@ -9,7 +9,7 @@
 
 	****************************************************************]]
 
--- 1.20 Cataclysm
+-- 1.20 Cataclysm - Several changes, new database
 -- 1.00 WoW 4
 -- 0.82 fixed a bug in "DB.Purge", included correct database
 -- 0.80 separated instance and world drop areas, changed quest faction
@@ -63,16 +63,11 @@
 -- + Merge the new dual best area
 -- + purge cache after merge
 -- + Extra tooltip on search listbox click
--- - Filtering of quest display
--- - Same quest-giver can be at several locations, and quests only show
---   up in these locations. Some must be "moving" (they have a path), in
---   which case all quests show up all the time.
--- - Quests stored by qID for separation of the few same-named quests.
+-- + Quests stored by qID for separation of the few same-named quests.
 
 -- CATACLYSM
 -- http://forums.worldofwarcraft.com/thread.html?topicId=25626580975&sid=1
 -- - Optional include of supplied database
--- - Allow for quest-givers that change position as quests are done
 
 
 
@@ -336,7 +331,7 @@ function DropCountXML:OnLoad(frame)
 	frame:RegisterEvent("ZONE_CHANGED_NEW_AREA");
 	frame:RegisterEvent("QUEST_DETAIL");
 	frame:RegisterEvent("QUEST_COMPLETE");
-	frame:RegisterEvent("QUEST_FINISHED");
+	frame:RegisterEvent("QUEST_ACCEPTED");
 	frame:RegisterEvent("UNIT_SPELLCAST_START");
 	frame:RegisterEvent("QUEST_QUERY_COMPLETE");
 
@@ -720,9 +715,13 @@ function DropCount.Event.QUEST_COMPLETE()
 	LCDC_RescanQuests=CONST.RESCANQUESTS;
 end
 
-function DropCount.Event.QUEST_FINISHED()		-- Also when frame is closed (apparently)
+--function DropCount.Event.QUEST_FINISHED()		-- Also when frame is closed (apparently)
+function DropCount.Event.QUEST_ACCEPTED()
 	LCDC_RescanQuests=CONST.RESCANQUESTS;
 end
+--function DropCount.Event.UNIT_QUEST_LOG_CHANGED()
+--	LCDC_RescanQuests=CONST.RESCANQUESTS;
+--end
 
 function DropCount.Event.UNIT_SPELLCAST_START(name,spell)
 	if (name~="player") then return; end		-- Someone else in party
@@ -746,12 +745,9 @@ end
 function DropCountXML:OnEvent(dummyself,event,...)
 	if (DropCount.Event[event]) then DropCount.Event[event](...); return; end
 	local frame,index=...;
---	frame=arg1;			-- until cataclysm
---	index=arg2;			-- until cataclysm
 
 	if (event=="ADDON_LOADED" and frame=="LootCount_DropCount") then
 		DuckLib.Table:Init(DM_WHO,true,LootCount_DropCount_DB);	-- Set defaults for compressing database
---		DuckLib.Table:Init(DM_WHO,false,LootCount_DropCount_DB);	-- Set defaults for compressing database
 		DropCount.Hook.TT_SetBagItem=GameTooltip.SetBagItem; GameTooltip.SetBagItem=DropCount.Hook.SetBagItem;
 		if (LootCount_DropCount_Character.ShowZoneMobs==nil) then LootCount_DropCount_Character.ShowZoneMobs=false; end
 		if (LootCount_DropCount_Character.ShowZone==nil) then LootCount_DropCount_Character.ShowZone=true; end
@@ -764,6 +760,9 @@ function DropCountXML:OnEvent(dummyself,event,...)
 			DropCount:MinimapSetIconAngle(LootCount_DropCount_DB.IconPosition);
 		end
 		CONST.MYFACTION=UnitFactionGroup("player");
+		if (not LootCount_DropCount_Character.LastQG) then
+			LootCount_DropCount_Character.LastQG={};
+		end
 		DropCount:ConvertBookFormat();
 		DropCount.Icons.MakeMM:Vendor();
 		DropCount.Icons.MakeMM:Book();
@@ -1067,6 +1066,34 @@ function DropCountXML.AstrolabeEdge()
 	end
 end
 
+function DropCount.Quest:AddLastQG(qGiver)
+	if (not LootCount_DropCount_Character.LastQG) then return; end
+	local index=1;
+	local found=0;
+	-- Find same q-giver
+	while (index<=10 and found==0) do
+		if (LootCount_DropCount_Character.LastQG[index] and LootCount_DropCount_Character.LastQG[index]==qGiver) then
+			found=index;
+		end
+		index=index+1;
+	end
+	if (found>=1) then
+		-- Move this q-giver to top
+		while (found>1) do
+			LootCount_DropCount_Character.LastQG[found]=LootCount_DropCount_Character.LastQG[found-1];
+			found=found-1;
+		end
+	else
+		-- Insert at the top
+		index=10;
+		while (index>1) do
+			LootCount_DropCount_Character.LastQG[index]=LootCount_DropCount_Character.LastQG[index-1];
+			index=index-1;
+		end
+	end
+	LootCount_DropCount_Character.LastQG[1]=qGiver;
+end
+
 function DropCount.Quest:SaveQuest(qName,qGiver,qLevel)
 	if (not qName) then return; end
 	if (not qLevel) then qLevel=0; end
@@ -1109,6 +1136,7 @@ function DropCount.Quest:SaveQuest(qName,qGiver,qLevel)
 	if (type(qTable[qGiver].Quests[i])~="table") then qTable[qGiver].Quests[i]={}; end
 	qTable[qGiver].Quests[i].Quest=qName;
 
+	self:AddLastQG(qGiver);
 	while (qTable[qGiver].Quests[i+1]) do							-- It's not the bottom quest
 		qTable[qGiver].Quests[i],qTable[qGiver].Quests[i+1]=qTable[qGiver].Quests[i+1],qTable[qGiver].Quests[i];
 		newquest=true;
@@ -1116,7 +1144,6 @@ function DropCount.Quest:SaveQuest(qName,qGiver,qLevel)
 	end
 	if (newquest) then
 		DropCount.DB.Quest:Write(qGiver,qTable[qGiver]);
---DropCount:SaveDebug(qTable[qGiver],qGiver)
 		if (DropCount.Debug) then DuckLib:Chat(CONST.C_BASIC.."New Quest "..CONST.C_GREEN.."\""..qName.."\""..CONST.C_BASIC.." saved for "..CONST.C_GREEN..qGiver); end
 	end
 end
@@ -1179,8 +1206,36 @@ function DropCount.Quest:Scan()
 		end
 	end
 
-	-- Find the new quest, if any
+	-- Shove numbers
+	i=1;
+	while(LootCount_DropCount_Character.LastQG[i]) do	-- q-givers list
+		if (LootCount_DropCount_DB.Quest[CONST.MYFACTION][LootCount_DropCount_Character.LastQG[i]]) then
+			local tqg=DropCount.DB.Quest:Read(CONST.MYFACTION,LootCount_DropCount_Character.LastQG[i]);
+			local changed=nil;
+			if (tqg and tqg.Quests) then				-- Same q-giver from database
+				local qi=1;
+				while (tqg.Quests[qi] and not changed) do
+					if (not tqg.Quests[qi].ID) then
+						for qname,qnTable in pairs(LootCount_DropCount_Character.Quests) do
+--							if (tqg.Quests[qi].Quest==qname and tqg.Quests[qi].Header==qnTable.Header) then
+							if (tqg.Quests[qi].Quest==qname) then
+								tqg.Quests[qi].ID=qnTable.ID;	-- Set ID
+								changed=true;
+							end
+							if (changed) then break; end	-- This q okay
+						end
+					end
+					qi=qi+1
+				end
+			end
+			if (changed) then
+				DropCount.DB.Quest:Write(LootCount_DropCount_Character.LastQG[i],tqg,CONST.MYFACTION);
+			end
+		end
+		i=i+1
+	end
 end
+
 
 function DropCount:WalkQuests()
 	if (not DropCount.SpoolQuests) then return; end
@@ -1202,9 +1257,6 @@ function DropCount:WalkQuests()
 									changed=true;
 								end
 								if (nTable.Quests[index].Quest==quest) then
-	--if (npc=="Xink") then
-	--	DuckLib:Chat(faction.."-"..quest.."-"..qTable.Header.."-"..nTable.Quests[index].Header);
-	--end
 									if (not nTable.Quests[index].Header or
 										(qTable.Header and nTable.Quests[index].Header~=qTable.Header)) then
 										nTable.Quests[index].Header=qTable.Header;
@@ -1226,10 +1278,7 @@ function DropCount:WalkQuests()
 	if (empty) then DropCount.SpoolQuests=nil; end
 end
 
---function DropCount.Icons.MakeMM:Quest()
---end
 function DropCount.Icons.MakeMM:Quest()
---	if (not CONST.ZONES) then DropCount:EnumZones(); if (not CONST.ZONES) then return; end end
 	local mapID,floorNum,ZoneName,SubZone=DropCount.Map:ForDatabase();
 	for npc,nTable in pairs(DropCountXML.Icon.QuestMM) do
 		Astrolabe:RemoveIconFromMinimap(DropCountXML.Icon.QuestMM[npc]);
@@ -1246,7 +1295,7 @@ function DropCount.Icons.MakeMM:Quest()
 						local r,g,b=1,1,1;
 						local level=0;
 						for _,qTable in pairs(nTable.Quests) do
-							local state=DropCount:GetQuestStatus(qTable.Quest);
+							local state=DropCount:GetQuestStatus(qTable.ID,qTable.Quest);
 							if (state==CONST.QUEST_NOTSTARTED and level<3) then r,g,b=0,1,0; level=3; end
 							if (state==CONST.QUEST_STARTED and level<2) then r,g,b=1,1,1; level=2; end
 							if (state==CONST.QUEST_DONE and level<1) then r,g,b=0,0,0; level=1; end
@@ -1278,11 +1327,7 @@ function DropCount.Icons.MakeMM:Quest()
 	end
 end
 
---function DropCount.Icons.MakeWM:Quest(Cont,Zone)
---end
 function DropCount.Icons.MakeWM:Quest(mapID,floorNum,ZoneName)
---	if (not CONST.ZONES) then DropCount:EnumZones(); if (not CONST.ZONES) then return; end end
---	local mapID,floorNum,ZoneName,SubZone=DropCount.Map:ForDatabase();
 	for npc,nTable in pairs(DropCountXML.Icon.Quest) do
 		nTable.NPC.Unused=true;
 	end
@@ -1300,7 +1345,7 @@ function DropCount.Icons.MakeWM:Quest(mapID,floorNum,ZoneName)
 							local r,g,b=1,1,1;
 							local level=0;
 							for _,qTable in pairs(nTable.Quests) do
-								local state=DropCount:GetQuestStatus(qTable.Quest);
+								local state=DropCount:GetQuestStatus(qTable.ID,qTable.Quest);
 								if (state==CONST.QUEST_NOTSTARTED and level<3) then r,g,b=0,1,0; level=3; end
 								if (state==CONST.QUEST_STARTED and level<2) then r,g,b=1,1,1; level=2; end
 								if (state==CONST.QUEST_DONE and level<1) then r,g,b=0,0,0; level=1; end
@@ -1335,10 +1380,7 @@ end
 
 function DropCount.Icons:Plot()
 	if (not WorldMapDetailFrame) then return; end
-	--local c=GetCurrentMapContinent();
-	--if (c<1) then return; end		-- Cosmos or battleground or DK starting-area
 	local m=GetCurrentMapAreaID();
-	--local z=GetCurrentMapZone();
 	local f=GetCurrentMapDungeonLevel();
 	local zn=LootCount_DropCount_Maps[GetLocale()]
 	if (zn) then zn=zn[m]; end
@@ -1398,17 +1440,6 @@ function DropCount:SetBookMMPosition(book,xPos,yPos)
 	Astrolabe:PlaceIconOnMinimap(DropCountXML.Icon.BookMM[book],DropCountXML.Icon.BookMM[book].Book.Map,DropCountXML.Icon.BookMM[book].Book.Floor,DropCountXML.Icon.BookMM[book].Book.X,DropCountXML.Icon.BookMM[book].Book.Y);
 end
 
---function DropCount:EnumZones()
---	if (CONST.ZONES) then DuckLib:ClearTable(CONST.ZONES); CONST.ZONES=nil; end
---	local cNames = { GetMapContinents() };
---	CONST.ZONES={ };
---	local c=1;
---	while(cNames[c]) do
---		CONST.ZONES[c]={ GetMapZones(c) } ;
---		c=c+1;
---	end
---end
-
 function DropCount:ListBook(bookin)
 	if (not LootCount_DropCount_DB.Book) then return; end
 	local book=string.lower(bookin);
@@ -1446,10 +1477,7 @@ function DropCount:ListZoneBooks()
 	if (not found) then DuckLib:Chat(CONST.C_YELLOW.."No known books in "..here.."|r"); end
 end
 
---function DropCount.Icons.MakeMM:Book()
---end
 function DropCount.Icons.MakeMM:Book()
---	if (not CONST.ZONES) then DropCount:EnumZones(); if (not CONST.ZONES) then return; end end
 	local mapID,floorNum,ZoneName,SubZone=DropCount.Map:ForDatabase();
 	for book,bTable in pairs(DropCountXML.Icon.BookMM) do
 		Astrolabe:RemoveIconFromMinimap(DropCountXML.Icon.BookMM[book]);
@@ -1481,11 +1509,7 @@ function DropCount.Icons.MakeMM:Book()
 	end
 end
 
---function DropCount.Icons.MakeWM:Book(Cont,Zone)
---end
 function DropCount.Icons.MakeWM:Book(mapID,floorNum,ZoneName)
---	if (not CONST.ZONES) then DropCount:EnumZones(); if (not CONST.ZONES) then return; end end
---	local mapID,floorNum,ZoneName,SubZone=DropCount.Map:ForDatabase();
 	for book,bTable in pairs(DropCountXML.Icon.Book) do
 		bTable.Book.Unused=true;
 	end
@@ -1517,10 +1541,7 @@ function DropCount.Icons.MakeWM:Book(mapID,floorNum,ZoneName)
 	end
 end
 
---function DropCount.Icons.MakeMM:Vendor()
---end
 function DropCount.Icons.MakeMM:Vendor()
---	if (not CONST.ZONES) then DropCount:EnumZones(); if (not CONST.ZONES) then return; end end
 	local mapID,floorNum,ZoneName,SubZone=DropCount.Map:ForDatabase();
 	for vendor,vTable in pairs(DropCountXML.Icon.VendorMM) do
 		Astrolabe:RemoveIconFromMinimap(DropCountXML.Icon.VendorMM[vendor]);
@@ -1558,11 +1579,7 @@ function DropCount.Icons.MakeMM:Vendor()
 	end
 end
 
---function DropCount.Icons.MakeWM:Vendor(Cont,Zone)
---end
 function DropCount.Icons.MakeWM:Vendor(mapID,floorNum,ZoneName)
---	if (not CONST.ZONES) then DropCount:EnumZones(); if (not CONST.ZONES) then return; end end
---	local mapID,floorNum,ZoneName,SubZone=DropCount.Map:ForDatabase();
 	for vendor,vTable in pairs(DropCountXML.Icon.Vendor) do
 		vTable.Vendor.Unused=true;
 	end
@@ -1659,6 +1676,10 @@ function DropCount.DB.Count:Read(mob,base)
 end
 
 function DropCount.DB.Item:Write(item,iData)
+	DuckLib.Table:Write(DM_WHO,item,iData,LootCount_DropCount_DB.Item);
+end
+
+function DropCount.DB.Item:WriteOld(item,iData)
 	self.Fast[item]=DuckLib:CopyTable(iData,self.Fast[item]);
 	if (not iData.Time) then iData.Time=time(); end
 	if (not iData.Item) then iData.Item="<Unknown Item>"; end
@@ -1703,94 +1724,20 @@ end
 function DropCount.DB.Item:ReadByName(name)
 	if (not LootCount_DropCount_DB.Item) then return nil; end
 	for item,iRaw in pairs(LootCount_DropCount_DB.Item) do
-		if (iRaw:find(name,1,true)==1) then
-			return self:Read(item),item;
+		if (iRaw:find(name,1,true)) then
+			local thisItem=self:Read(item);
+			if (thisItem.Item==name) then
+				return thisItem,item;
+			end
 		end
 	end
 	return nil;
 end
 
 function DropCount.DB.Item:Read(item,base)
-	local store=nil;
-	local storeMD=nil;
-	if (not base) then
-		if (self.Fast[item]) then return self.Fast[item]; end
-		base=LootCount_DropCount_DB.Item;
-		store=true;
-	elseif (LootCount_DropCount_MergeData and LootCount_DropCount_MergeData.Item and base==LootCount_DropCount_MergeData.Item) then
-		if (self.Fast.MD[item]) then return self.Fast.MD[item]; end
-		storeMD=true;
-	end
-	if (not base) then return nil; end
+	if (not base) then base=LootCount_DropCount_DB.Item; end
 	if (not base[item]) then return nil; end
-
-	if (type(base[item])=="table") then
-		return base[item];
-	end
-
-	local nData;
-	if (store) then
-		if (self.Fast[item]) then wipe(self.Fast[item]); else self.Fast[item]={}; end
-		nData=self.Fast[item];
-	elseif (storeMD) then
-		if (self.Fast.MD[item]) then wipe(self.Fast.MD[item]); else self.Fast.MD[item]={}; end
-		nData=self.Fast.MD[item];
-	else nData={}; end
-	local drop,skin,best,quest;
-	nData.Item,nData.Time,drop,skin,best,quest=strsplit(CONST.SEP1,base[item]);
-	nData.Time=tonumber(nData.Time);
-	if (drop and drop~="") then
-		nData.Name={};
-		drop={strsplit(CONST.SEP2,drop)};
-		for _,data in ipairs(drop) do
-			local mob,count=strsplit(CONST.SEP3,data);
-			nData.Name[mob]=tonumber(count);
-			-- Zero drops. The old compress-bug has destroyed the mob
-			if (nData.Name[mob]==0 and store) then
-				local rData=DropCount.DB.Count:Read(mob);
-				if (rData) then
-					if (rData.Skinning) then					-- There's skinning-drops
-						rData.Kill=nil;							-- No drops only
-						DropCount.DB.Count:Write(mob,rData);
-					else										-- No skinning, so kill it
-						LootCount_DropCount_DB.Count[mob]=nil;	-- Kill mob
-						DropCount.DB.Count.Fast[mob]=nil;		-- Kill mob
-					end
-				end
-				DropCount:ClearMobDrop(mob,"Name");				-- Kill all normal drops from mob
-				return DropCount.DB.Item:Read(item,base);		-- Normal read after mod
-			end
-		end
-	end
-	if (skin and skin~="") then
-		nData.Skinning={};
-		skin={strsplit(CONST.SEP2,skin)};
-		for _,data in ipairs(skin) do
-			local mob,count=strsplit(CONST.SEP3,data);
-			nData.Skinning[mob]=tonumber(count);
-		end
-	end
-	if (best and best~="") then
-		nData.Best={};
-		nData.BestW={};
-		nData.Best.Location,nData.Best.Score,nData.BestW.Location,nData.BestW.Score=strsplit(CONST.SEP2,best);
-		nData.Best.Score=tonumber(nData.Best.Score);
-		if (nData.BestW.Score) then
-			nData.BestW.Score=tonumber(nData.BestW.Score);
-		else
-			nData.BestW=nil;
-		end
-	end
-	if (quest and quest~="") then
-		nData.Quest={};
-		quest={strsplit(CONST.SEP2,quest)};
-		for _,data in ipairs(quest) do
-			local qName,amount=strsplit(CONST.SEP3,data);
-			nData.Quest[qName]=tonumber(amount);
-		end
-	end
-
-	return nData;
+	return DuckLib.Table:Read(DM_WHO,item,base);
 end
 
 function DropCount:VendorsForItem()
@@ -2024,6 +1971,7 @@ function DropCount:AddKill(oma,GUID,mob,reservedvariable,noadd,notransmit,otherz
 		mTable.Kill=mTable.Kill+1;
 		if (mTable.Kill==50 or mTable.Kill==(math.floor(mTable.Kill/100)*100)) then
 			DuckLib:Chat(CONST.C_BASIC.."DropCount: "..CONST.C_YELLOW..mob..CONST.C_BASIC.." has been killed "..CONST.C_YELLOW..mTable.Kill..CONST.C_BASIC.." times!");
+			DuckLib:Chat(CONST.C_BASIC.."Please consider sending your SavedVariables file to "..CONST.C_YELLOW.."dropcount@ybeweb.com"..CONST.C_BASIC.." to help develop the DropCount addon.");
 		end
 		if (not notransmit) then DropCount.Com:Transmit(GUID,mob); end
 		DropCount.DB.Count:Write(mob,mTable);
@@ -2674,7 +2622,7 @@ function DropCount:SortByNames(list)
 	return list;
 end
 
-function DropCount:GetQuestStatus(checkquest)
+function DropCount:GetQuestStatus(qId,qName)
 	local White="|cFFFFFFFF";
 	local Yellow="|cFFFFFF00";
 	local Red="|cFFFF0000";
@@ -2682,19 +2630,29 @@ function DropCount:GetQuestStatus(checkquest)
 	local bBlue="|cFFA0A0FF";		-- Bright blue
 	local Dark="|cFF808080";
 
-	if (not checkquest) then return CONST.QUEST_UNKNOWN,White; end
+	if (not qName) then return CONST.QUEST_UNKNOWN,White; end
 	if (not LootCount_DropCount_DB.Quest) then return CONST.QUEST_UNKNOWN,White; end
 
 	-- Check running quests
 	if (LootCount_DropCount_Character.Quests) then
-		if (LootCount_DropCount_Character.Quests[checkquest]) then
-			return CONST.QUEST_STARTED,Yellow;	-- I have it
+		if (LootCount_DropCount_Character.Quests[qName]) then
+			if (LootCount_DropCount_Character.Quests[qName].ID) then
+				if (LootCount_DropCount_Character.Quests[qName].ID==qId) then
+					return CONST.QUEST_STARTED,Yellow;	-- I have it
+				end
+			else
+				return CONST.QUEST_STARTED,Red;	-- It does not have an ID
+			end
 		end
 	end
 	-- Maybe it's done
 	if (LootCount_DropCount_Character.DoneQuest) then
-		if (LootCount_DropCount_Character.DoneQuest[checkquest]) then
-			return CONST.QUEST_DONE,Dark;		-- I've done it
+		if (LootCount_DropCount_Character.DoneQuest[qName]) then
+			if (LootCount_DropCount_Character.DoneQuest[qName]==qId) then
+				return CONST.QUEST_DONE,Dark;		-- I've done it
+			else
+				return CONST.QUEST_DONE,Dark;		-- I've done it
+			end
 		end
 	end
 
@@ -2712,10 +2670,10 @@ function DropCount.Tooltip:QuestList(faction,npc,parent,frame)
 	frame:SetOwner(parent,"ANCHOR_CURSOR");
 	frame:SetText(npc);
 	for _,qData in pairs(nTable.Quests) do
-		local quest,header;
-		quest=qData.Quest; header=qData.Header;
+		local quest,header,id;
+		quest=qData.Quest; header=qData.Header; id=qData.ID;
 		if (not header) then header=""; end
-		local _,colour=DropCount:GetQuestStatus(quest);
+		local _,colour=DropCount:GetQuestStatus(id,quest);
 		frame:LCAddDoubleLine("  "..colour..quest,colour..header,1,1,1,1,1,1);
 	end
 	frame:Show();
@@ -2751,14 +2709,11 @@ function DropCount.Tooltip:SetNPCContents(unit,parent,frame,force)
 	local breakit=nil;
 	if (not frame) then frame=LootCount_DropCount_TT; end
 	if (not force) then
-		if (LootCount_DropCount_DB.Quest) then
-			for faction,fTable in pairs(LootCount_DropCount_DB.Quest) do
-				for npc,nTable in pairs(fTable) do
-					if (npc==unit) then
-						breakit=true;
-						DropCount.Tooltip:QuestList(CONST.MYFACTION,unit,parent,frame);
-					end
-					if (breakit) then break; end
+		if (LootCount_DropCount_DB.Quest and LootCount_DropCount_DB.Quest[CONST.MYFACTION]) then
+			for npc,nTable in pairs(LootCount_DropCount_DB.Quest[CONST.MYFACTION]) do
+				if (npc==unit) then
+					breakit=true;
+					DropCount.Tooltip:QuestList(CONST.MYFACTION,unit,parent,frame);
 				end
 				if (breakit) then break; end
 			end
@@ -2768,13 +2723,8 @@ function DropCount.Tooltip:SetNPCContents(unit,parent,frame,force)
 	if (not LootCount_DropCount_DB.Vendor[unit]) then return; end
 
 	local vData=DropCount.DB.Vendor:Read(unit);
---	if (vData) then return; end
 	if (not vData) then return; end
-	if (not vData.Items) then
-DuckLib:Chat("Debug save: Vendor saved for mouseover");
-LootCount_DropCount_DB.LastVendorMouseOver=DuckLib:CopyTable(vData);
-		return;
-	end
+	if (not vData.Items) then return; end
 
 	frame:ClearLines();
 	if (not parent) then parent=UIParent; end
@@ -2891,6 +2841,7 @@ function DropCount:SetLootlist(unit,AltTT)
 	AltTT.Loading=nil;
 	if (not itemsinlist) then AltTT:Hide(); return; end
 
+	-- Build the window on screen
 	list=DropCount:SortByRatio(list);
 	line=1;
 	while(list[line]) do
@@ -2952,6 +2903,7 @@ end
 
 -- A blind update will queue a request at the server without any
 -- book-keeping at this side.
+-- CATACLYSM: Cache has been greatly improved by speed at the server side.
 function DropCount.Cache:Execute(item,blind)
 	if (type(item)=="number") then item="item:"..item;
 	elseif (type(item)~="string") then return true; end
@@ -3117,9 +3069,6 @@ end
 
 function DropCountXML:BuildMenu(button)
 	DropCount.ThisBuffer=button;
---	if (not LootCount_DropCount_MenuOptions) then
---		LootCount_DropCount_MenuOptions=CreateFrame("Frame",nil,nil,"UIDropDownMenuTemplate");
---	end
 	UIDropDownMenu_Initialize(LootCount_DropCount_MenuOptions,DropCountXML.MenuLoad,"MENU");
 end
 
@@ -3286,6 +3235,7 @@ function DropCount:SaveBook(BookName,bZone,bX,bY,Map)
 	LootCount_DropCount_DB.Book[BookName][i]={
 		X=bX,
 		Y=bY,
+		Zone=bZone,
 		Map=Map,
 
 	};

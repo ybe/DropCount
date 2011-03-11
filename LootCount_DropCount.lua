@@ -1679,48 +1679,6 @@ function DropCount.DB.Item:Write(item,iData)
 	DuckLib.Table:Write(DM_WHO,item,iData,LootCount_DropCount_DB.Item);
 end
 
-function DropCount.DB.Item:WriteOld(item,iData)
-	self.Fast[item]=DuckLib:CopyTable(iData,self.Fast[item]);
-	if (not iData.Time) then iData.Time=time(); end
-	if (not iData.Item) then iData.Item="<Unknown Item>"; end
-	local compact=iData.Item..CONST.SEP1..iData.Time..CONST.SEP1;
-	if (iData.Name) then
-		local first=true;
-		for mob,count in pairs(iData.Name) do
-			if (not first) then compact=compact..CONST.SEP2; end
-			compact=compact..mob..CONST.SEP3..count;
-			first=nil;
-		end
-	end
-	compact=compact..CONST.SEP1;
-	if (iData.Skinning) then
-		local first=true;
-		for mob,count in pairs(iData.Skinning) do
-			if (not first) then compact=compact..CONST.SEP2; end
-			compact=compact..mob..CONST.SEP3..count;
-			first=nil;
-		end
-	end
-	compact=compact..CONST.SEP1;
-	if (iData.Best) then
-		compact=compact..iData.Best.Location..CONST.SEP2..iData.Best.Score
-		if (iData.BestW) then
-			compact=compact..CONST.SEP2..iData.BestW.Location..CONST.SEP2..iData.BestW.Score
-		end
-	end
-	compact=compact..CONST.SEP1;
-	if (iData.Quest) then
-		local first=true;
-		for quest,amount in pairs(iData.Quest) do
-			if (not first) then compact=compact..CONST.SEP2; end
-			compact=compact..quest..CONST.SEP3..amount;
-			first=nil;
-		end
-	end
-	if (not LootCount_DropCount_DB.Item) then LootCount_DropCount_DB.Item={}; end
-	LootCount_DropCount_DB.Item[item]=compact;
-end
-
 function DropCount.DB.Item:ReadByName(name)
 	if (not LootCount_DropCount_DB.Item) then return nil; end
 	for item,iRaw in pairs(LootCount_DropCount_DB.Item) do

@@ -1,5 +1,5 @@
 --[[****************************************************************
-	LootCount DropCount v1.20
+	LootCount DropCount v1.22
 
 	Author: Evil Duck
 	****************************************************************
@@ -9,6 +9,7 @@
 
 	****************************************************************]]
 
+-- 1.22 Fixed background non-existent done quests, bugfixes, new database
 -- 1.20 Cataclysm - Several changes, new database
 -- 1.00 WoW 4
 -- 0.82 fixed a bug in "DB.Purge", included correct database
@@ -71,7 +72,7 @@
 
 
 
-LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v1.20";
+LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v1.22";
 LOOTCOUNT_DROPCOUNT = "DropCount";
 SLASH_DROPCOUNT1 = "/dropcount";
 SLASH_DROPCOUNT2 = "/lcdc";
@@ -3474,41 +3475,53 @@ function DropCount.OnUpdate:RunQuestScan(elapsed)
 end
 
 function DropCount.OnUpdate:WalkOldQuests(elapsed)
+	if (not LootCount_DropCount_DB.QuestQuery) then return; end
 	if (DropCount.Timer.PrevQuests>=0) then
 		DropCount.Timer.PrevQuests=DropCount.Timer.PrevQuests-elapsed;
-		if (DropCount.Timer.PrevQuests<0 and LootCount_DropCount_DB.QuestQuery) then
-			local count=nil;
-			for qIndex,_ in pairs(LootCount_DropCount_DB.QuestQuery) do
-				count=true;
-				local qName=DropCount:GetQuestName("quest:"..qIndex);
-				if (qName) then
-					if (LootCount_DropCount_Character.DoneQuest[qName]) then
-						if (type(LootCount_DropCount_Character.DoneQuest[qName])~="table") then
-							if (LootCount_DropCount_Character.DoneQuest[qName]~=true) then
-								local num=LootCount_DropCount_Character.DoneQuest[qName];
-								LootCount_DropCount_Character.DoneQuest[qName]=nil;
-								LootCount_DropCount_Character.DoneQuest[qName]={};
-								LootCount_DropCount_Character.DoneQuest[qName][num]=true;
-								LootCount_DropCount_Character.DoneQuest[qName][qIndex]=true;
-							else
-								LootCount_DropCount_Character.DoneQuest[qName]=qIndex;
-							end
-						else
+		return;
+	end
+	if (DropCount.Timer.PrevQuests<0 and LootCount_DropCount_DB.QuestQuery) then
+		local count=nil;
+		for qIndex,_ in pairs(LootCount_DropCount_DB.QuestQuery) do
+			count=true;
+			local qName=DropCount:GetQuestName("quest:"..qIndex);
+			if (qName) then
+				if (LootCount_DropCount_Character.DoneQuest[qName]) then
+					if (type(LootCount_DropCount_Character.DoneQuest[qName])~="table") then
+						if (LootCount_DropCount_Character.DoneQuest[qName]~=true) then
+							local num=LootCount_DropCount_Character.DoneQuest[qName];
+							LootCount_DropCount_Character.DoneQuest[qName]=nil;
+							LootCount_DropCount_Character.DoneQuest[qName]={};
+							LootCount_DropCount_Character.DoneQuest[qName][num]=true;
 							LootCount_DropCount_Character.DoneQuest[qName][qIndex]=true;
+						else
+							LootCount_DropCount_Character.DoneQuest[qName]=qIndex;
 						end
 					else
-						LootCount_DropCount_Character.DoneQuest[qName]=qIndex;
+						LootCount_DropCount_Character.DoneQuest[qName][qIndex]=true;
 					end
-					LootCount_DropCount_DB.QuestQuery[qIndex]=nil;
-					DropCount.Tracker.ConvertQuests=DropCount.Tracker.ConvertQuests-1;
+				else
+					LootCount_DropCount_Character.DoneQuest[qName]=qIndex;
 				end
-				DropCount.Timer.PrevQuests=(1/3);
-				break;
+				LootCount_DropCount_DB.QuestQuery[qIndex]=nil;
+				DropCount.Tracker.ConvertQuests=DropCount.Tracker.ConvertQuests-1;
+			else
+				if (type(LootCount_DropCount_DB.QuestQuery[qIndex])~="number") then
+					LootCount_DropCount_DB.QuestQuery[qIndex]=10;
+				else
+					LootCount_DropCount_DB.QuestQuery[qIndex]=LootCount_DropCount_DB.QuestQuery[qIndex]-1;
+					if (LootCount_DropCount_DB.QuestQuery[qIndex]<0) then
+						LootCount_DropCount_DB.QuestQuery[qIndex]=nil;
+						DropCount.Tracker.ConvertQuests=DropCount.Tracker.ConvertQuests-1;
+					end
+				end
 			end
-			if (not count) then
-				LootCount_DropCount_DB.QuestQuery=nil;
-				LCDC_RescanQuests=CONST.RESCANQUESTS;
-			end
+			DropCount.Timer.PrevQuests=(1/3);
+			break;
+		end
+		if (not count) then
+			LootCount_DropCount_DB.QuestQuery=nil;
+			LCDC_RescanQuests=CONST.RESCANQUESTS;
 		end
 	end
 end
@@ -4010,18 +4023,9 @@ function DropCount:MergeDatabase()
 	DropCount.Icons.MakeMM:Book();
 	DropCount.Icons.MakeMM:Quest();
 
-	DropCount.DB:Purge();
+	DuckLib.Table:PurgeCache(DM_WHO)
 
 	return true;
-end
-
--- Purge the read/write cache. After a merge, this will free up 20+ MB
-function DropCount.DB:Purge()
-	wipe(self.Vendor.Fast);
-	wipe(self.Quest.Fast); self.Quest.Fast={ MD={}, };
-	wipe(self.Count.Fast); self.Count.Fast={ MD={}, };
-	wipe(self.Item.Fast); self.Item.Fast={ MD={}, };
-	collectgarbage("collect");
 end
 
 function DropCount.DB:PreCheck(raw,contents)

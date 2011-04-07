@@ -76,7 +76,7 @@ LOOTCOUNT_DROPCOUNT = "DropCount";
 SLASH_DROPCOUNT1 = "/dropcount";
 SLASH_DROPCOUNT2 = "/lcdc";
 local DM_WHO="LCDC";
-local DuckLib=DuckMod[2.0202];
+local DuckLib=DuckMod[2.0203];
 
 --DropCount={
 local DropCount={
@@ -574,11 +574,19 @@ end
 function DropCount.Event.PLAYER_FOCUS_CHANGED(...) DropCount.Event.PLAYER_TARGET_CHANGED(...); end
 function DropCount.Event.PLAYER_TARGET_CHANGED()
 	local targettype=DropCount:GetTargetType();
+--	if (not targettype) then
+--		DropCount.Target.MyKill=nil;
+--		DropCount.Target.Skin=nil;
+--		DropCount.Target.UnSkinned=nil;
+--		DropCount.Target.CurrentAliveFriendClose=nil;
+--		return;
+--	end
+	DropCount.Profession=nil;
+	DropCount.Target.MyKill=nil;
+	DropCount.Target.Skin=nil;
+	DropCount.Target.UnSkinned=nil;
+	DropCount.Target.CurrentAliveFriendClose=nil;
 	if (not targettype) then
-		DropCount.Target.MyKill=nil;
-		DropCount.Target.Skin=nil;
-		DropCount.Target.UnSkinned=nil;
-		DropCount.Target.CurrentAliveFriendClose=nil;
 		return;
 	end
 	DropCount.Target.MyKill=nil;
@@ -1801,13 +1809,13 @@ function DropCount:ReadMerchant(dude)
 	end
 	if (not ReadOk) then
 		if (not DropCount.VendorProblem) then
-			DuckLib:Chat("Unchached item(s) at this vendor. Look through the vendor-pages to load missing items from the server.",1);
+--			DuckLib:Chat("Unchached item(s) at this vendor. Look through the vendor-pages to load missing items from the server.",1);
 			DropCount.VendorProblem=true;
 		end
 	else
 		DropCount.DB.Vendor:Write(dude,vData);
 		if (DropCount.VendorProblem) then
-			DuckLib:Chat("Vendor saved",0,1,0);
+--			DuckLib:Chat("Vendor saved",0,1,0);
 			rebuildIcons=true;
 		end
 		if (rebuildIcons) then
@@ -1927,7 +1935,7 @@ function DropCount:AddKill(oma,GUID,mob,reservedvariable,noadd,notransmit,otherz
 	mTable.Zone=otherzone;		-- Set zone for last kill
 	if (not noadd) then
 		mTable.Kill=mTable.Kill+1;
-		if (mTable.Kill==50 or mTable.Kill==(math.floor(mTable.Kill/100)*100)) then
+		if ((mTable.Kill<=50 and mod(mTable.Kill,10)==0) or mTable.Kill==(math.floor(mTable.Kill/100)*100)) then
 			DuckLib:Chat(CONST.C_BASIC.."DropCount: "..CONST.C_YELLOW..mob..CONST.C_BASIC.." has been killed "..CONST.C_YELLOW..mTable.Kill..CONST.C_BASIC.." times!");
 			DuckLib:Chat(CONST.C_BASIC.."Please consider sending your SavedVariables file to "..CONST.C_YELLOW.."dropcount@ybeweb.com"..CONST.C_BASIC.." to help develop the DropCount addon.");
 		end
@@ -3952,6 +3960,16 @@ function DropCount:MergeDatabase()
 			end
 			LootCount_DropCount_MergeData.Item[item]=nil;
 			if (not DropCount:MergeStatus()) then return; end
+		end
+	end
+
+	-- Maps
+	if (LootCount_DropCount_Maps) then		-- I have maps
+		for Lang,LTable in pairs(LootCount_DropCount_Maps) do		-- Check all locales I have
+			if (LootCount_DropCount_MergeData.Maps[Lang]) then		-- Hardcoded has same locale
+				-- Blend tables
+				LootCount_DropCount_Maps[Lang]=DuckLib:CopyTable(LootCount_DropCount_MergeData.Maps[Lang],LootCount_DropCount_Maps[Lang])
+			end
 		end
 	end
 

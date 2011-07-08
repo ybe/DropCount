@@ -1,4 +1,4 @@
-## Interface: 40000
+## Interface: 40200
 ## Title: LootCount |cFF9900FFDrop-rate|r
 ## Notes: LootCount Drop-rate counter
 ## DefaultState: Enabled
@@ -15,3 +15,5 @@ DuckMod.lua
 DuckMod_Widgets\Widgets.xml
 localization.en.lua
 LootCount_DropCount.xml
+
+## ripper.lua

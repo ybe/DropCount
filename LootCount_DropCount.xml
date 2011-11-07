@@ -97,7 +97,7 @@
 			<!--              XXXX xxxx  -->
 			<!-- Use Vendors  xxxx xxxx  -->
 			<!--              xxxx xxxx  -->
-			<CheckButton name="$parent_UseVendors" inherits="DuckMod_CheckBoxA_02">
+			<CheckButton name="$parent_UseVendors" inherits="DuckMod_CheckBoxA">
 				<Anchors>
 					<Anchor point="TOPLEFT"><Offset><AbsDimension x="20" y="-31"/></Offset></Anchor>
 					<Anchor point="RIGHT" relativePoint="CENTER"><Offset><AbsDimension x="-10"/></Offset></Anchor>
@@ -106,7 +106,7 @@
 			<!--              xxxx xxxx  -->
 			<!-- Use Quests   XXXX xxxx  -->
 			<!--              xxxx xxxx  -->
-			<CheckButton name="$parent_UseQuests" inherits="DuckMod_CheckBoxA_02">
+			<CheckButton name="$parent_UseQuests" inherits="DuckMod_CheckBoxA">
 				<Anchors>
 					<Anchor point="TOPLEFT" relativeTo="$parent_UseVendors" relativePoint="BOTTOMLEFT"><Offset><AbsDimension y="-2"/></Offset></Anchor>
 					<Anchor point="RIGHT" relativeTo="$parent_UseVendors"></Anchor>
@@ -115,7 +115,7 @@
 			<!--              xxxx xxxx  -->
 			<!-- Use Books    xxxx xxxx  -->
 			<!--              XXXX xxxx  -->
-			<CheckButton name="$parent_UseBooks" inherits="DuckMod_CheckBoxA_02">
+			<CheckButton name="$parent_UseBooks" inherits="DuckMod_CheckBoxA">
 				<Anchors>
 					<Anchor point="TOPLEFT" relativeTo="$parent_UseQuests" relativePoint="BOTTOMLEFT"><Offset><AbsDimension y="-2"/></Offset></Anchor>
 					<Anchor point="RIGHT" relativeTo="$parent_UseQuests"></Anchor>
@@ -124,7 +124,7 @@
 			<!--              xxxx XXXX  -->
 			<!-- Use Items    xxxx xxxx  -->
 			<!--              xxxx xxxx  -->
-			<CheckButton name="$parent_UseItems" inherits="DuckMod_CheckBoxA_02">
+			<CheckButton name="$parent_UseItems" inherits="DuckMod_CheckBoxA">
 				<Anchors>
 					<Anchor point="LEFT" relativeTo="$parent_UseVendors" relativePoint="RIGHT"><Offset><AbsDimension x="20"/></Offset></Anchor>
 					<Anchor point="RIGHT" relativeTo="$parent"><Offset><AbsDimension x="-20"/></Offset></Anchor>
@@ -133,7 +133,7 @@
 			<!--              xxxx xxxx  -->
 			<!-- Use Mobs     xxxx XXXX  -->
 			<!--              xxxx xxxx  -->
-			<CheckButton name="$parent_UseMobs" inherits="DuckMod_CheckBoxA_02">
+			<CheckButton name="$parent_UseMobs" inherits="DuckMod_CheckBoxA">
 				<Anchors>
 					<Anchor point="TOPLEFT" relativeTo="$parent_UseItems" relativePoint="BOTTOMLEFT"><Offset><AbsDimension y="-2"/></Offset></Anchor>
 					<Anchor point="RIGHT" relativeTo="$parent_UseItems"></Anchor>
@@ -194,6 +194,9 @@
 		</Layers>
 		<Scripts>
 			<OnUpdate> </OnUpdate>
+			<Scripts>
+				<OnEvent>DropCountXML:OnEvent(self,event,...)</OnEvent>
+			</Scripts>
 		</Scripts>
 	</Frame>
 </Ui>

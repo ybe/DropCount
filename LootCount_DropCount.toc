@@ -1,4 +1,4 @@
-## Interface: 40200
+## Interface: 40300
 ## Title: LootCount |cFF9900FFDrop-rate|r
 ## Notes: LootCount Drop-rate counter
 ## DefaultState: Enabled
@@ -11,9 +11,13 @@
 
 
 Astrolabe\Load.xml
-DuckMod.lua
+## DuckMod.lua
 DuckMod_Widgets\Widgets.xml
 localization.en.lua
+localization.fr.lua
+localization.de.lua
+localization.ru.lua
+localization.pt.lua
 LootCount_DropCount.xml
 
 ## ripper.lua

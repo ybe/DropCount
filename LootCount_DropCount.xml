@@ -139,6 +139,15 @@
 					<Anchor point="RIGHT" relativeTo="$parent_UseItems"></Anchor>
 				</Anchors>
 			</CheckButton>
+			<!--              xxxx xxxx  -->
+			<!-- Use Trainers xxxx xxxx  -->
+			<!--              xxxx XXXX  -->
+			<CheckButton name="$parent_UseTrainers" inherits="DuckMod_CheckBoxA">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativeTo="$parent_UseMobs" relativePoint="BOTTOMLEFT"><Offset><AbsDimension y="-2"/></Offset></Anchor>
+					<Anchor point="RIGHT" relativeTo="$parent_UseMobs"></Anchor>
+				</Anchors>
+			</CheckButton>
 			<!-- The search-term -->
 			<EditBox name="$parent_FindText" autoFocus="false" inherits="DuckMod_EditText_01">
 				<Size><AbsDimension x="201" y="20"/></Size>

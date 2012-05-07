@@ -18,8 +18,8 @@
 		</Scripts>
 	</Slider>
 
-	<!--  Standard checkbox for DuckMod_CheckList  -->
-	<CheckButton name="DuckMod_CheckBoxA_01" virtual="true">
+	<!--  Standard stand-alone checkbox  -->
+	<CheckButton name="DuckMod_CheckBoxA" virtual="true">
 		<Size><AbsDimension y="17"/></Size>
 		<Layers>
 			<Layer level="BACKGROUND">
@@ -48,19 +48,22 @@
 		<Scripts>
 			<OnLoad>
 				self.defaultIndent=19;
-				self.SetText=DuckWidget.SetButtonText;
-				self.GetText=DuckWidget.GetButtonText;
-				self.SetTextColor=DuckWidget.SetButtonTextColor;
+				self.SetText=DuckWidget.CheckBox.SetButtonText;
+				self.GetText=DuckWidget.CheckBox.GetButtonText;
+				self.SetTextColor=DuckWidget.CheckBox.SetButtonTextColor;
 				self.SetIcon=DuckWidget.CheckBox.SetIcon;
 			</OnLoad>
-			<OnClick>DuckWidget.ListBox.ListButtonClicked(self);</OnClick>
-			<OnEnter>DuckWidget.ListBox.ListButtonHover(self,true);</OnEnter>
-			<OnLeave>DuckWidget.ListBox.ListButtonHover(self,nil);</OnLeave>
 		</Scripts>
 	</CheckButton>
 
-	<!--  Standard stand-alone checkbox  -->
-	<CheckButton name="DuckMod_CheckBoxA_02" inherits="DuckMod_CheckBoxA_01" virtual="true">
+	<!--  Standard checkbox for DuckMod_CheckList  -->
+	<CheckButton name="DuckMod_CheckBoxA_01" inherits="DuckMod_CheckBoxA" virtual="true">
+		<Scripts>
+			<OnClick>DuckWidget.ListBox.ListButtonClicked(self);</OnClick>
+			<OnEnter>DuckWidget.ListBox.ListButtonHover(self,true);</OnEnter>
+			<OnLeave>DuckWidget.ListBox.ListButtonHover(self,nil);</OnLeave>
+			<OnMouseWheel>DuckWidget.MouseWheel(_G[self:GetParent():GetName().."_Scroll"],delta);</OnMouseWheel>
+		</Scripts>
 	</CheckButton>
 
 	<!--  Dynamic texture handling  -->
@@ -101,6 +104,7 @@
 		</Frames>
 		<Scripts>
 			<OnLoad>
+				self.DMSpacing=2;
 				self.DMEntries=0;
 				self.defaultSort=true;
 				DuckWidget.ListBox.SetFuncs(self);

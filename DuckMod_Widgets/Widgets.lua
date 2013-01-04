@@ -13,7 +13,7 @@
 
 ------------------------------------------------------------------------
 	ListBox:DMClear()
-	
+
 	Clear the list.
 
 ------------------------------------------------------------------------
@@ -68,13 +68,19 @@ if (not DuckMod_Widgets_Version) then
 end
 
 
-if (DuckMod_Widgets_Version<1) then				-- This version
-	DuckMod_Widgets_Version=1;
+if (DuckMod_Widgets_Version<2.01) then			-- This version
+	DuckMod_Widgets_Version=2.01;
 
-	DM_STATE_LIST=0;			-- Just dumb text
-	DM_STATE_INACTIVE=1;		-- Unclickable button
-	DM_STATE_CHECKED=2;			-- Checked button
-	DM_STATE_UNCHECKED=3;		-- Unchecked button
+	        DM_STATE_LIST=0x0000;	-- Just dumb text
+	    DM_STATE_INACTIVE=0x0001;	-- Unclickable button
+	     DM_STATE_CHECKED=0x0002;	-- Checked button v1 (exclusive)
+	  DM_STATE_CHECKEDexc=0x0002;	-- Checked button v2 exclusive
+	   DM_STATE_UNCHECKED=0x0003;	-- Unchecked button v1 (exclusive)
+	DM_STATE_UNCHECKEDexc=0x0003;	-- Unchecked button v2 exclusive
+	      DM_STATE_MASKv1=0x0FFF;	-- Mask for testing v1 compatibility
+	      DM_STATE_MASKv2=0xF000;	-- Mask for testing v2 settings
+	  DM_STATE_CHECKEDinc=0x8002;	-- Checked button v2 inclusive
+	DM_STATE_UNCHECKEDinc=0x8003;	-- Unchecked button v2 inclusive
 
 	if (not DuckWidget) then DuckWidget={}; end	-- If it exists, just overlay
 	if (not DuckWidget.ListBox) then DuckWidget.ListBox={}; end	-- If it exists, just overlay
@@ -131,6 +137,8 @@ end
 
 function DuckWidget.ListBox.Clear(frame)
 	frame.DMEntries=0;
+	_G[frame:GetName().."_Scroll"]:SetMinMaxValues(1,1);		-- Set span
+	_G[frame:GetName().."_Scroll"]:SetValue(1);
 	DuckWidget.ListBox.Redraw(frame);
 end
 
@@ -141,6 +149,14 @@ end
 -- position: END, index
 function DuckWidget.ListBox.Add(frame,entry,state,indent,icon)
 	local position=nil;
+	if (not entry) then return; end
+	if (entry:find("§",1,true)) then
+		local buf={strsplit("§",entry)};
+		for _,entry in ipairs(buf) do
+			if (strtrim(entry)~="") then DuckWidget.ListBox.Add(frame,entry,state,indent,icon); end
+		end
+		return;
+	end
 	frame.DMEntries=frame.DMEntries+1;									-- One more in list
 	local length=(frame.DMEntries-DuckWidget.ListBox.VisibleEntries(frame))+1;
 	if (length<1) then length=1; end
@@ -160,6 +176,7 @@ end
 -- state   : LIST, checked, unchecked, inactive
 -- position: END, index
 function DuckWidget.ListBox.Set(frame,entry,state,indent,icon,position)
+	if (not entry) then entry=""; end
 	if (not position) then return DuckWidget.ListBox.Add(frame,entry,state,indent,icon); end
 	if (not frame.DMTheList) then frame.DMTheList={}; end
 	if (not state) then state=DM_STATE_LIST; end
@@ -185,12 +202,12 @@ end
 function DuckWidget.ListBox.Sort(list,length,index)
 	indent=list[index].Indent;		-- This level
 	-- Up
-	while(index>1 and list[index-1].Indent==indent and list[index].Entry<list[index-1].Entry) do
+	while(index>1 and list[index-1].Indent==indent and tostring(list[index].Entry)<tostring(list[index-1].Entry)) do
 		list[index-1],list[index]=list[index],list[index-1];
 		index=index-1;
 	end
 	-- Down
-	while(index<length and list[index+1].Indent==indent and list[index].Entry>list[index+1].Entry) do
+	while(index<length and list[index+1].Indent==indent and tostring(list[index].Entry)>tostring(list[index+1].Entry)) do
 		list[index+1],list[index]=list[index],list[index+1];
 		index=index+1;
 	end
@@ -236,6 +253,7 @@ function DuckWidget.ListBox.Redraw(frame,remake)
 
 	-- Update from first visible entry
 	local offset=_G[fName.."_Scroll"]:GetValue()-1;
+	if (offset<0) then offset=0; end
 	i=1;
 	while(i<=visible and i<=frame.DMEntries-offset) do
 		local button=_G[fName.."_Entry"..i];
@@ -248,7 +266,9 @@ function DuckWidget.ListBox.Redraw(frame,remake)
 				button:SetText(text);
 				button:SetIcon(frame.DMTheList[offset+i].Icon);
 				button.ListIndex=offset+i;
-				if (frame.DMTheList[offset+i].State==DM_STATE_CHECKED) then
+--				if ((frame.DMTheList[offset+i].State)==DM_STATE_CHECKED) then	-- v1
+--print(frame.DMTheList[offset+i].State);
+				if (bit.band(frame.DMTheList[offset+i].State,DM_STATE_MASKv1)==DM_STATE_CHECKEDexc) then	-- v2
 					button:SetChecked(true);
 				else
 					button:SetChecked(nil);
@@ -278,31 +298,36 @@ function DuckWidget.ListBox.SendEvent(button,event)
 	if (not handler) then
 		parent=button:GetParent();
 		handler=parent:GetScript("OnEvent");
-		if (not handler) then DEFAULT_CHAT_FRAME:AddMessage("No handler"); return; end
+		if (not handler) then
+--			DEFAULT_CHAT_FRAME:AddMessage("No handler");
+			return;
+		end
 	end
-	handler(parent,event,button:GetParent(),button.ListIndex);
+	handler(parent,event,button:GetParent(),button.ListIndex,button:GetChecked());
 end
 
 function DuckWidget.ListBox.ListButtonClicked(button)
 	local _,i=button:GetName():find("_Entry"); if (not i) then return; end
 	i=tonumber(button:GetName():sub(i+1));
-	local state=button:GetParent().DMTheList[i].State;
-	if (state==DM_STATE_CHECKED) then state=DM_STATE_UNCHECKED;
-	elseif (state==DM_STATE_UNCHECKED) then state=DM_STATE_CHECKED;
-	elseif (state==DM_STATE_LIST) then state=DM_STATE_UNCHECKED;
-	elseif (state==DM_STATE_INACTIVE) then state=DM_STATE_UNCHECKED;
+	local offset=_G[button:GetParent():GetName().."_Scroll"]:GetValue()-1;
+	local state=button:GetParent().DMTheList[offset+i].State;
+
+	if (state==DM_STATE_CHECKEDexc) then state=DM_STATE_UNCHECKEDexc;		-- v1 compatible
+	elseif (state==DM_STATE_UNCHECKEDexc) then state=DM_STATE_CHECKEDexc;	-- v1 compatible
+	elseif (state==DM_STATE_CHECKEDinc) then state=DM_STATE_UNCHECKEDinc;
+	elseif (state==DM_STATE_UNCHECKEDinc) then state=DM_STATE_CHECKEDinc;
 	end
 
-	-- Set all buttons unchecked
+	-- Set all exclusive buttons unchecked
 	local tmp=1;
 	while (tmp<=button:GetParent().DMEntries) do
-		if (button:GetParent().DMTheList[tmp].State==DM_STATE_CHECKED) then
-			button:GetParent().DMTheList[tmp].State=DM_STATE_UNCHECKED;
+		if (button:GetParent().DMTheList[tmp].State==DM_STATE_CHECKEDexc) then
+			button:GetParent().DMTheList[tmp].State=DM_STATE_UNCHECKEDexc;
 		end
 		tmp=tmp+1;
 	end
 	-- Set correct for this button
-	button:GetParent().DMTheList[i].State=state;
+	button:GetParent().DMTheList[offset+i].State=state;
 
 	DuckWidget.ListBox.Redraw(button:GetParent());
 	DuckWidget.ListBox.SendEvent(button,"DMEVENT_LISTBOX_ITEM_CLICKED");

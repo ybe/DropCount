@@ -14,7 +14,7 @@
 
 	<Button name="LCDC_VendorFlagTemplate" inherits="ItemButtonTemplate" frameStrata="HIGH" virtual="true">
 		<Size><AbsDimension x="12" y="12" /></Size>
-		<NormalTexture name="$parentNormalTexture" file=""/>
+		<NormalTexture name="$parentNormalTexture"/>
 		<Scripts>
 			<OnEnter>DropCountXML:OnEnterIcon(self);</OnEnter>
 			<OnLeave>ResetCursor();LootCount_DropCount_TT:Hide();LCDC_VendorFlag_Info=nil;</OnLeave>
@@ -159,7 +159,7 @@
 					<OnEnterPressed>DropCountXML:GUI_Search();</OnEnterPressed>
 				</Scripts>
 			</EditBox>
-			<Button name="$parent_DoSearch" inherits="UIPanelButtonTemplate2" text="Search">
+			<Button name="$parent_DoSearch" inherits="UIPanelButtonTemplate" text="Search">
 				<Size><AbsDimension x="80" y="22"/></Size>
 				<Anchors>
 					<Anchor point="LEFT" relativeTo="$parent_FindText" relativePoint="RIGHT"><Offset><AbsDimension x="20"/></Offset></Anchor>

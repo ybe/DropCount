@@ -1,5 +1,5 @@
---[[****************************************************************
-	LootCount DropCount v1.36
+﻿--[[****************************************************************
+	LootCount DropCount v1.40
 
 	Author: Evil Duck
 	****************************************************************
@@ -9,7 +9,10 @@
 
 	****************************************************************]]
 
--- 1.38 Added forges and trainers, new icon code
+-- 1.40 Added forges and trainers, new icon plot code (compacted), merge
+--      forges and trainers, options gui, BG DB cleaning, selective
+--      exclusion of DB sections, compact TT option, 'Count' added to
+--      database removal code
 -- 1.36 DuckMod removed, database update
 -- 1.34d4 DuckMod v2.9906, database update
 -- 1.34d3 DuckMod v2.10, database update
@@ -70,14 +73,18 @@
 
 
 -- TODO (? Maybe, ! Important, - Normal (not done), + Done)
--- - Merge forges and trainers
+-- - Walk quests and remove same ID quests from items when mobs have them.
+
 
 -- CATACLYSM
 -- http://forums.worldofwarcraft.com/thread.html?topicId=25626580975&sid=1
 -- - Optional include of supplied database
 
 
-LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v1.38";
+local debugtimerthing,debugtimerthingbig=0,0;
+
+local _;
+LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v1.40";
 LOOTCOUNT_DROPCOUNT = "DropCount";
 SLASH_DROPCOUNT1 = "/dropcount";
 SLASH_DROPCOUNT2 = "/lcdc";
@@ -87,7 +94,6 @@ local DM_WHO="LCDC";
 local DropCount={		-- release
 	Loaded=nil,
 	Debug=nil,
-	Registered=nil,
 	Update=0,
 	ThisBuffer=nil,
 	VendorProblem=nil,
@@ -104,9 +110,12 @@ local DropCount={		-- release
 	Hook={},
 	Font={},
 	Map={},
+	Crawler={},
 	MT={
 		Icons={},
-		DB={},
+		DB={
+			Maintenance={},
+		},
 	},
 	Quest={
 		LastScan={},
@@ -167,7 +176,7 @@ local DropCount={		-- release
 		},
 		CleanImport={
 			Cleaned=nil,
-			LastMob=nil,
+--			LastMob=nil,
 			Okay=0,
 			Deleted=0,
 		},
@@ -189,6 +198,7 @@ local DropCount={		-- release
 	Menu={
 		Minimap=nil,
 	},
+	WoW5={},
 };
 DropCountXML={
 	Icon={
@@ -315,8 +325,10 @@ local MT={
 	LastStack="",
 	Current=0,
 	Count=0,
-	Speed=(1/30),
---	Speed=(1/30)*1000,
+	Speed=(1/30)*1000,
+--	Speed=(1/30),			-- regular, noticable by user
+	FastMT=(1/100)*1000,	-- adaptable, virtually un-noticable
+--	FastMT=(1/100),			-- adaptable, virtually un-noticable
 	LastTime=0,
 	Threads={
 	},
@@ -340,62 +352,67 @@ LootCount_DropCount_DB={
 };
 LootCount_DropCount_Maps={}
 LootCount_DropCount_NoQuest = {
-	[2735] = true,
 	[10593] = true,
-	[2751] = true,
+	[2799] = true,
+	[2744] = true,
 	[8705] = true,
 	[21377] = true,
-	[8391] = true,
-	[2799] = true,
+	[35188] = true,
 	[8392] = true,
 	[16656] = true,
-	[8393] = true,
 	[11512] = true,
 	[8394] = true,
+	[8391] = true,
+	[8393] = true,
 	[8396] = true,
-	[25719] = true,
+	[2738] = true,
 	[5113] = true,
-	[12840] = true,
-	[22528] = true,
+	[38551] = true,
+	[8483] = true,
+	[22526] = true,
+	[22527] = true,
+	[12841] = true,
 	[22529] = true,
 	[28452] = true,
 	[29209] = true,
-	[2730] = true,
-	[24401] = true,
-	[25433] = true,
-	[18944] = true,
-	[24291] = true,
-	[11018] = true,
-	[12841] = true,
+	[21383] = true,
+	[22528] = true,
 	[10450] = true,
-	[4582] = true,
-	[24449] = true,
-	[5117] = true,
-	[35188] = true,
+	[25433] = true,
+	[18945] = true,
 	[2732] = true,
 	[2740] = true,
+	[5117] = true,
 	[2748] = true,
-	[5134] = true,
-	[29740] = true,
-	[29739] = true,
-	[29426] = true,
+	[4582] = true,
+	[19259] = true,
 	[2725] = true,
-	[31812] = true,
-	[2738] = true,
+	[5134] = true,
+	[24449] = true,
+	[20404] = true,
 	[2749] = true,
-	[38551] = true,
-	[30809] = true,
-	[30810] = true,
-	[29425] = true,
+	[29426] = true,
 	[11407] = true,
+	[30810] = true,
+	[31812] = true,
+	[11018] = true,
 	[2734] = true,
 	[2742] = true,
 	[2750] = true,
-	[22527] = true,
-	[21383] = true,
-	[22526] = true,
-	[8483] = true,
-	[2744] = true,
+	[30809] = true,
+	[29739] = true,
+	[29740] = true,
+	[11754] = true,
+	[29425] = true,
+	[2735] = true,
+	[18944] = true,
+	[2751] = true,
+	[2730] = true,
+	[12840] = true,
+	[24291] = true,
+	[24401] = true,
+	[25719] = true,
+	[24368] = true,
 }
 
 
@@ -422,7 +439,6 @@ function DropCountXML:OnLoad(frame)
 	frame:RegisterEvent("QUEST_COMPLETE");
 	frame:RegisterEvent("QUEST_ACCEPTED");
 	frame:RegisterEvent("UNIT_SPELLCAST_START");
-	frame:RegisterEvent("QUEST_QUERY_COMPLETE");
 
 	CONST.PROFESSIONS[1],_,CONST.PROFICON[1]=GetSpellInfo(8613);	-- Skinning
 	CONST.PROFESSIONS[2],_,CONST.PROFICON[2]=GetSpellInfo(2366);	-- Herb gathering
@@ -438,6 +454,7 @@ function DropCountXML:OnLoad(frame)
 	CONST.PROFESSIONS[12],_,CONST.PROFICON[12]=GetSpellInfo(2108);	-- Leatherworking
 	CONST.PROFESSIONS[13],_,CONST.PROFICON[13]=GetSpellInfo(3908);	-- Tailoring
 	CONST.PROFESSIONS[14],_,CONST.PROFICON[14]=GetSpellInfo(33388);	-- Apprentice riding
+	DropCountXML.ForgeIcon=CONST.PROFICON[5];
 
 	StaticPopupDialogs["LCDC_D_NOTIFICATION"] = {
 		text="Text",
@@ -600,8 +617,8 @@ function DropCountXML.Slasher(msg)
 		if (msg~="") then
 			npc=msg;
 		end
-		DropCount:RemoveFromItem("Name",npc)
-		DropCount:RemoveFromItem("Skinning",npc)
+		DropCount:RemoveFromItems("Name",npc)
+		DropCount:RemoveFromItems("Skinning",npc)
 		LootCount_DropCount_DB.Count[npc]=nil;
 		DropCount:Chat(npc.." has been deleted.");
 		return;
@@ -691,25 +708,27 @@ end
 
 --function DropCount.Event.COMBAT_LOG_EVENT_UNFILTERED(_,how,_,source,_,_,GUID,mob)
 function DropCount.Event.COMBAT_LOG_EVENT_UNFILTERED(_,how,_,source,_,_,_,GUID,mob)
+	DropCount.WoW5:ConvertMOB(mob,GUID:sub(7,10));
 	if (how=="PARTY_KILL" and (bit.band(source,COMBATLOG_OBJECT_TYPE_PET) or bit.band(source,COMBATLOG_OBJECT_TYPE_PLAYER))) then
-		if (GetNumPartyMembers()<1) then
-			DropCount:AddKill(true,GUID,mob,LootCount_DropCount_Character.Skinning);
+-- Mop
+--		if (GetNumPartyMembers()<1) then
+--			DropCount:AddKill(true,GUID,mob,LootCount_DropCount_Character.Skinning);
+		if (GetNumGroupMembers()<1) then
+			DropCount:AddKill(true,GUID,GUID:sub(7,10),mob,LootCount_DropCount_Character.Skinning);
 		end
-		if (DropCount.Registered) then LootCountAPI.Force(LOOTCOUNT_DROPCOUNT); end
+		if (DropCount.LootCount.Registered) then LootCountAPI.Force(LOOTCOUNT_DROPCOUNT); end
 	end
 end
 
 function DropCount.Event.PLAYER_FOCUS_CHANGED(...) DropCount.Event.PLAYER_TARGET_CHANGED(...); end
 function DropCount.Event.PLAYER_TARGET_CHANGED()
 	local targettype=DropCount:GetTargetType();
-	DropCount.Profession=nil;
 	DropCount.Target.MyKill=nil;
 	DropCount.Target.Skin=nil;
 	DropCount.Target.UnSkinned=nil;
 	DropCount.Target.CurrentAliveFriendClose=nil;
-	if (not targettype) then
-		return;
-	end
+	if (not targettype) then return; end
+	DropCount.Profession=nil;		-- only zero on new target, not on removal of target
 	DropCount.Target.MyKill=nil;
 	if (not UnitIsDead(targettype)) then
 		DropCount.Target.LastFaction=UnitFactionGroup(targettype);
@@ -717,6 +736,7 @@ function DropCount.Event.PLAYER_TARGET_CHANGED()
 			DropCount.Target.LastFaction="Neutral";
 		end
 		DropCount.Target.LastAlive=UnitName(targettype);
+		DropCount.WoW5:ConvertMOB(UnitName(targettype),UnitGUID(targettype):sub(7,10));
 		DropCount.Target.CurrentAliveFriendClose=nil;
 		if (CheckInteractDistance(targettype,2)) then	-- Trade-distance
 			DropCount.Target.CurrentAliveFriendClose=DropCount.Target.LastAlive;
@@ -726,52 +746,330 @@ function DropCount.Event.PLAYER_TARGET_CHANGED()
 	if (UnitIsFriend("player",targettype)) then return; end
 	DropCount.Target.CurrentAliveFriendClose=nil;
 	DropCount.Target.GUID=UnitGUID(targettype);
-	DropCount.Target.Skin=UnitName(targettype);				-- Get current valid target
-	DropCount.Target.UnSkinned=DropCount.Target.Skin;	-- Set unit for skinning-drop
+	DropCount.Target.Skin=UnitName(targettype);					-- Get current valid target
+	DropCount.Target.UnSkinned=DropCount.Target.GUID:sub(7,10);	-- Set unit for skinning-drop
 	if (UnitIsTapped(targettype)) and (not UnitIsTappedByPlayer(targettype)) then return; end	-- Not my kill (in case of skinning)
 	DropCount.Target.MyKill=DropCount.Target.Skin;			-- Save name of dead targetted/focused enemy
 end
 
-function DropCount.Event.LOOT_OPENED()
-	DropCount.Tracker.LootList=nil; DropCount.Tracker.LootList={};
-	local slots=GetNumLootItems();
-	if (slots<1) then DropCount:Chat("Zero-loot",1); end
-	for i=1,slots do
-		DropCount.Tracker.LootList[i]={};
-		_,_,DropCount.Tracker.LootList[i].Count=GetLootSlotInfo(i);	-- Returns icon path, item name, and item quantity for the item in the given loot window slot
-		DropCount.Tracker.LootList[i].Item=DropCount:GetID(GetLootSlotLink(i));	-- Returns an itemLink for the item in the given loot window slot
-	end
-	local mTable=DropCount.Tracker.Looted;	-- Set normal loot mobs
-	if (DropCount.Profession) then
-		mTable=DropCount.Tracker.Skinned;		-- Set skinning loot mobs
-	else
-		-- It's normal, so check if it has already been skinned
-		if (DropCount.Tracker.Skinned[DropCount.Target.GUID]) then return; end			-- Loot already done for this one
-	end
-	if (mTable[DropCount.Target.GUID]) then return; end			-- Loot already done for this one
-	if (DropCount.Profession and DropCount.Target.MyKill) then		-- If my kill (or pet or something that makes me loot it)
-		DropCount:AddKill(true,DropCount.Target.GUID,DropCount.Target.MyKill);
-	elseif (not DropCount.Profession) then
-		DropCount:AddKill(true,DropCount.Target.GUID,DropCount.Target.UnSkinned);	-- Add the targetted dead dude that I didn't have the killing blow on
-	end
+--== MoP change
+--== GetLootSourceInfo(slot) - will return a list of creature GUIDs and count.
 
-	local now=time();
-	-- Save loot
-	mTable[DropCount.Target.GUID]=now;							-- Set it
+--for i=1,GetNumLootItems() do
+--	local t={GetLootSourceInfo(i)}
+--	print("loot #",i,"=",#t/2,"units:")
+--	for j=1,#t,2 do
+--		print("    ",t[j],"=",tonumber(t[j]:sub(6,10),16),"=",t[j+1])
+--	end
+--end
+
+function DropCount.WoW5:ConvertMOB(name,sguid,base)
+	if (not base) then base=LootCount_DropCount_DB; end
+	if (not base.Count or not base.Count[name]) then return; end
+	if (sguid=="0000") then return; end
+	local mdata=DropCount.DB.Count:Read(name,base.Count);	-- get old data
+	mdata.Name=name;										-- add textual name
+	DropCount.DB.Count:Write(sguid,mdata,base.Count);		-- write it at short guid
+	base.Count[name]=nil;									-- remove old entry
+	if (not base.Item) then return; end
+	for item,idata in pairs(base.Item) do					-- do all items
+		if (idata:find(name,1,true)) then					-- look for this mob by name
+			idata=DropCount.DB.Item:Read(item,base.Item);	-- read the item
+			if (idata.Name and idata.Name[name]) then		-- look for mob by name
+				idata.Name[sguid]=idata.Name[name];			-- copy it to short guid
+				idata.Name[name]=nil;						-- remove by name
+			end
+			if (idata.Skinning and idata.Skinning[name]) then
+				idata.Skinning[sguid]=idata.Skinning[name];
+				idata.Skinning[name]=nil;
+			end
+			DropCount.DB.Item:Write(item,idata,base.Item);	-- write item
+		end
+	end
+--print("Converted:",name,sguid);
+end
+
+--["item:29580:0:0:0:0:0:0"]
+--	Name
+--		Morcrush 2
+--		Son of Corok 7
+--		Farahlon Breaker 8
+--		Karrog 1
+--	Time 1327834129
+--	Item Crystal Fragments
+--	Best
+--		Location Netherstorm - Netherstone
+--		Score 12
+--	BestW
+--		Location Blade's Edge Mountains - Scalewing Shelf
+--		Score 5
+
+function DropCount:FixLootAmounts()
+	local slots=GetNumLootItems();
+	if (slots<1) then DropCount:Chat("Zero-loot",1); return; end
+
+	-- item list
+	local items={};
 	for i=1,slots do
-		if (DropCount.Tracker.LootList[i].Count>0) then			-- Not money
-			if (DropCount.Target.MyKill) then
-				DropCount:AddLoot(DropCount.Target.GUID,DropCount.Target.MyKill,DropCount.Tracker.LootList[i].Item,DropCount.Tracker.LootList[i].Count);
-			elseif (DropCount.Target.Skin) then
-				DropCount:AddLoot(DropCount.Target.GUID,DropCount.Target.Skin,DropCount.Tracker.LootList[i].Item,DropCount.Tracker.LootList[i].Count);
+		local thisi=DropCount:GetID(GetLootSlotLink(i));
+		if (thisi) then
+			_,_,items[thisi]=GetLootSlotInfo(i);	-- icon, name, quantity
+		end
+	end
+-- item list
+--   item = number
+--   item = number
+
+	-- mob list
+	local mobs={};
+	for i=1,slots do
+		local item=DropCount:GetID(GetLootSlotLink(i));
+		local t={GetLootSourceInfo(i)};
+		for j=1,#t,2 do
+			if (not mobs[t[j] ]) then mobs[t[j] ]={}; end
+			local buf={ Count=t[j+1], Item=item };		-- create LootList-type table per unit
+			if (DropCount.Profession) then				-- don't resolve aoe loot on prof-loot
+				buf.Count=items[item];					-- use total count
+			end
+			table.insert(mobs[t[j] ],buf);				-- create LootList-type table per unit
+		end
+	end
+-- mob list
+--   guid 1 Count = number
+--          Item = string
+--        2 Count = number
+--          Item = string
+--   guid ...
+
+	-- create individual amounts
+	local vitems={};
+	for m,d in pairs(mobs) do		-- guid
+		for _,mi in pairs(d) do		-- indexed mob items
+			if (not vitems[mi.Item]) then
+				vitems[mi.Item]={ mobs=1, amount=mi.Count, guid={ m } };
+			else
+				vitems[mi.Item].mobs=vitems[mi.Item].mobs+1;
+				vitems[mi.Item].amount=vitems[mi.Item].amount+mi.Count;
+				table.insert(vitems[mi.Item].guid,m);
 			end
 		end
 	end
-	DropCount.Profession=nil;			-- Set normal type loot
-	-- Remove old mobs
-	for guid,when in pairs(mTable) do
-		if (now-when>CONST.LOOTEDAGE) then mTable[guid]=nil; end
+
+	-- check individual amounts
+--print(CONST.C_BASIC.."Loot summary:");
+	for i,d in pairs(items) do
+local show;
+local it=DropCount.DB.Item:Read(i); if (it and it.Item) then it=it.Item; else it=i; end
+local txt=CONST.C_HBLUE.."    "..it.."  Real:"..tostring(d).."  Mobs:"..tostring(vitems[i].amount);
+		if (vitems[i]) then
+			if (d~=vitems[i].amount) then
+txt=txt..CONST.C_RED.." -> "..vitems[i].amount-d;
+				if (vitems[i].mobs==1) then						-- only one mob and it's wrong
+--					mobs[vitems[i].guid[1] ].Count=d;			-- set correct (GetLootSlotInfo)
+					for _,mi in pairs(mobs[vitems[i].guid[1] ]) do	-- indexed mob items
+						if (mi.Item==i) then
+							mi.Count=d;							-- set correct (GetLootSlotInfo)
+						end
+					end
+txt=txt..CONST.C_GREEN.." FIXED (1m)";
+show=true;
+				else											-- multiple mobs, wrong total
+					-- distilled guid -> sguid list
+					local fi=nil;
+					local num=0;
+					local mt={};								-- mob type list
+					for _m,_d in pairs(mobs) do					-- do all mobs
+						for _,mi in pairs(_d) do					-- indexed mob items
+							if (mi.Item==i) then					-- > that drops this item
+								local sg=_m:sub(7,10);				-- get sguid
+								if (not mt[sg]) then
+									mt[sg]={ c=mi.Count, n=1, guid={_m} };
+									num=num+1;
+									if (not fi) then fi=_m; end
+								else
+									mt[sg].c=mt[sg].c+mi.Count;		-- add up for this sguid/type
+									mt[sg].n=mt[sg].n+1;			-- number of this type
+									table.insert(mt[sg].guid,_m);	-- add guid
+								end
+							end
+						end
+					end
+local ctxt;
+					if (num==1) then							-- only one mob type
+--ctxt=CONST.C_BASIC.."? "..i.." ->"; for d_m,d_d in pairs(mobs) do ctxt=ctxt..CONST.C_LBLUE..d_m:sub(7,10); for _,d_mi in pairs(d_d) do if (d_mi.Item==i) then ctxt=ctxt.."|r : "..CONST.C_WHITE..d_mi.Count.." "; end end end print(ctxt);
+						for _,mi in pairs(mobs[fi]) do			-- indexed mob items
+							if (mi.Item==i) then
+								mi.Count=mi.Count+(d-vitems[i].amount);	-- set all correction on one mob
+							end
+						end
+--ctxt=CONST.C_BASIC.."! "..i.." ->"; for d_m,d_d in pairs(mobs) do ctxt=ctxt..CONST.C_LBLUE..d_m:sub(7,10); for _,d_mi in pairs(d_d) do if (d_mi.Item==i) then ctxt=ctxt.."|r : "..CONST.C_WHITE..d_mi.Count.." "; end end end print(ctxt);
+txt=txt..CONST.C_GREEN.." FIXED (1t)";
+show=true;
+					else
+						-- multiple types and wrong total
+						local tr=0;								-- total ratio
+						for _m,_d in pairs(mt) do				-- get all previous ratios
+							mt[_m].r=DropCount:GetRatio(i,_m);	-- 1 = 100% (kill, skin, nosafe)
+							mt[_m].r=mt[_m].r*mt[_m].n;			-- multiply by mobs of this type
+							tr=tr+mt[_m].r;
+							if (mt[_m].r==0) then mt[_m].r=.01; end	-- accept no zeros
+						end
+						local all=0;
+						for _m,_d in pairs(mt) do				-- get all previous ratios
+							mt[_m].a=(mt[_m].r/tr)*d;			-- fractional result
+							mt[_m].a=math.floor(mt[_m].a+.5);	-- integer result
+							all=all+mt[_m].a;					-- total verificator
+						end
+						if (all~=d) then						-- calculation differs from real total
+							all=d-all;
+local diff=all;
+							if (all>0) then						-- items unaccounted for
+								repeat
+									local lom,lod;				-- low mob/data
+									for _m,_d in pairs(mt) do				-- get all previous ratios
+										if (not lom or mt[_m].a<lod) then	-- smaller found, or first
+											lom=_m; lod=_d.a;				-- save mob and aprx.data
+										end
+									end
+									mt[lom].a=mt[lom].a+1;		-- add 1 to lowest count
+									all=all-1;					-- it's counted
+								until (all==0);
+							else
+								repeat
+									local him,hid;				-- high mob/data
+									for _m,_d in pairs(mt) do				-- get all previous ratios
+										if (not him or mt[_m].a>hid) then	-- higher found, or first
+											him=_m; hid=_d.a;				-- save mob and aprx.data
+										end
+									end
+									mt[him].a=mt[him].a-1;		-- remove 1 from highest count
+									all=all+1;					-- it's counted
+								until (all==0);
+							end
+txt=txt..CONST.C_YELLOW.." APPROXIMATED ("..tostring(diff)..")";
+show=true;
+						else
+txt=txt..CONST.C_YELLOW.." CALCULATED";
+show=true;
+						end
+-- 1 zero for all mobs
+-- 2 apply mt to one of each mob types
+--ctxt=CONST.C_BASIC.."? "..i.." ->"; for d_m,d_d in pairs(mobs) do ctxt=ctxt..CONST.C_LBLUE..d_m:sub(7,10); for _,d_mi in pairs(d_d) do if (d_mi.Item==i) then ctxt=ctxt.."|r : "..CONST.C_WHITE..d_mi.Count.." "; end end end print(ctxt);
+						-- zero all mobs for this item
+						for _,mi in pairs(mobs) do
+							for _,mid in pairs(mi) do
+								if (mid.Item==i) then mid.Count=0; end
+							end
+						end
+						-- set mt to one of each type
+						for sg,sgd in pairs(mt) do
+							for m,mi in pairs(mobs) do
+								if (m:sub(7,10)==sg) then	-- correct type
+									local stopit=nil;
+									for _,mid in pairs(mi) do
+										if (mid.Item==i) then mid.Count=sgd.a; stopit=true; break; end
+									end
+									if (stopit) then break; end
+								end
+							end
+						end
+--ctxt=CONST.C_BASIC.."! "..i.." ->"; for d_m,d_d in pairs(mobs) do ctxt=ctxt..CONST.C_LBLUE..d_m:sub(7,10); for _,d_mi in pairs(d_d) do if (d_mi.Item==i) then ctxt=ctxt.."|r : "..CONST.C_WHITE..d_mi.Count.." "; end end end print(ctxt);
+					end
+				end
+			end
+		else
+txt=txt..CONST.C_RED.." ==>> missing from mobs";		-- never observed to happen. yet.
+show=true;
+		end
+--if (show) then print(txt); end
 	end
+
+-- mob list
+--   guid 1 Count = number
+--          Item = string
+--        2 Count = number
+--          Item = string
+--   guid ...
+
+	-- loot list
+	local ret={};
+	for guid,gL in pairs(mobs) do			-- guid
+		for _,i in pairs(gL) do				-- index
+			if (not ret[i.Item]) then ret[i.Item]={}; end
+			ret[guid]=i.Count;
+		end
+	end
+	ret.GetLootFormat=function(t,i)
+		local lft={};
+		if (type(i)=="string") then i=DropCount:GetID(i);
+		else i=DropCount:GetID(GetLootSlotLink(i)); end
+		if (not i or not t[i]) then return; end				-- unknown request
+		for g,c in pairs(t[i]) do table.insert(lft,g); table.insert(lft,c); end
+		return unpack(lft);
+	end
+	return ret,mobs;
+end
+
+function DropCount.Event.LOOT_OPENED()
+	local i,mobs=DropCount:FixLootAmounts();
+	if (not mobs) then return; end
+
+	if (not DropCount.OldQuestsVerified) then
+		LootCount_DropCount_DB.QuestQuery=GetQuestsCompleted();
+		DropCount:GetQuestNames();
+		DropCount.OldQuestsVerified=true;
+	end
+
+-- MoP
+	for guid,list in pairs(mobs) do
+		local skipit=nil;
+		local sguid=guid:sub(7,10);
+		-- pre-MoP modified for variable names
+		---- DropCount.Target.GUID -> guid
+		---- DropCount.Tracker.LootList -> list
+		---- DropCount.Target.UnSkinned -> sguid
+		local mTable=DropCount.Tracker.Looted;	-- Set normal loot mobs
+		if (DropCount.Profession) then
+			mTable=DropCount.Tracker.Skinned;		-- Set skinning loot mobs
+		else
+			-- It's normal, so check if it has already been skinned
+			if (DropCount.Tracker.Skinned[guid]) then skipit=true; end	-- Loot already done for this one
+		end
+		if (mTable[guid]) then skipit=true; end			-- Loot already done for this one
+		if (not skipit) then
+			if (DropCount.Profession and DropCount.Target.MyKill) then		-- If my kill (or pet or something that makes me loot it)
+	--			DropCount:AddKill(true,guid,DropCount.Target.MyKill);
+				DropCount:AddKill(true,guid,sguid);
+			elseif (not DropCount.Profession) then
+				DropCount:AddKill(true,guid,sguid);	-- Add the targetted dead dude that I didn't have the killing blow on
+			end
+--print("Looting:",sguid);
+			local now=time();
+			-- Save loot
+			mTable[guid]=now;							-- Set it
+	--		for i=1,slots do
+			for i=1,#list do
+--local it=DropCount.DB.Item:Read(list[i].Item);
+--if (it and it.Item) then print("    ",it.Item,list[i].Count); else print("    ",list[i].Item,list[i].Count); end
+				if (list[i].Item and list[i].Count==0) then
+					list[i].Count=1;
+--if (it) then print("    ","Zero-count",it.Item,"set to 1"); end
+				end
+				if (list[i].Count>0) then			-- Not money
+					if (DropCount.Target.MyKill) then
+						DropCount:AddLoot(guid,sguid,nil,list[i].Item,list[i].Count);
+					elseif (DropCount.Target.Skin) then
+						DropCount:AddLoot(guid,sguid,nil,list[i].Item,list[i].Count);
+					end
+				end
+			end
+			DropCount.Profession=nil;			-- Set normal type loot
+			-- Remove old mobs
+			for guid,when in pairs(mTable) do
+				if (now-when>CONST.LOOTEDAGE) then mTable[guid]=nil; end
+			end
+		end
+	end		-- MoP
 end
 
 function DropCount.Event.CHAT_MSG_ADDON(prefix,text,channel,sender)
@@ -862,7 +1160,7 @@ function DropCount.Event.UNIT_SPELLCAST_START(name,spell)
 	if (skillName and skillName==CONST.PROFESSIONS[3]) then		-- Mining
 		if (GetTradeSkillSelectionIndex()==0) then return; end
 		skillName=GetTradeSkillInfo(GetTradeSkillSelectionIndex());
-print("Selected:"..skillName..", Casted:"..spell);
+--print("Selected:"..skillName..", Casted:"..spell);
 		if (not skillName or skillName~=spell) then return; end
 		local fZone=GetRealZoneText();
 		local forges=DropCount.DB.Forge:Read(fZone);
@@ -879,30 +1177,25 @@ print("Selected:"..skillName..", Casted:"..spell);
 		if (not saved) then
 			table.insert(forges,fX.."_"..fY);
 		end
-print("Forge at "..fX..","..fY);
+--print("Forge at "..fX..","..fY);
 		DropCount.DB.Forge:Write(fZone,forges);
 		MT:Run("MM Plot",DropCount.MT.Icons.PlotMinimap);
 	end
-end
-
-function DropCount.Event.QUEST_QUERY_COMPLETE()
-	LootCount_DropCount_DB.QuestQuery={};
-	LootCount_DropCount_DB.QuestQuery=GetQuestsCompleted();
-	DropCount:GetQuestNames();
 end
 
 -- An event has been received
 --function DropCountXML:OnEvent(dummyself,event,...)
 function DropCountXML:OnEvent(_,event,...)
 	if (DropCount.Event[event]) then DropCount.Event[event](...); return; end
-	local frame,index=...;
+	local frame,index,checked=...;
 
 	if (event=="ADDON_LOADED" and frame=="LootCount_DropCount") then
+		if (DropCount_Local_Code_Enabled) then DropCount.Debug=true; end
 		Table:Init(DM_WHO,true,LootCount_DropCount_DB);	-- Set defaults for compressing database
 --		Table:Init(DM_WHO,false,LootCount_DropCount_DB);	-- Set defaults for compressing database
 		DropCount.Hook.TT_SetBagItem=GameTooltip.SetBagItem; GameTooltip.SetBagItem=DropCount.Hook.SetBagItem;
 		if (LootCount_DropCount_Character.ShowZoneMobs==nil) then LootCount_DropCount_Character.ShowZoneMobs=false; end
-		if (LootCount_DropCount_Character.ShowZone==nil) then LootCount_DropCount_Character.ShowZone=true; end
+		LootCount_DropCount_Character.ShowZone=nil;	-- Obsolete
 		if (not LootCount_DropCount_DB.CHANNELSET) then
 			LootCount_DropCount_DB.CHANNELSET=true;
 		end
@@ -923,7 +1216,12 @@ function DropCountXML:OnEvent(_,event,...)
 		if (IsInGuild()) then LootCount_DropCount_DB.GUILD=true; else LootCount_DropCount_DB.GUILD=nil; end
 		DropCount:RemoveFromDatabase();
 		LootCount_DropCount_RemoveData=nil;
-		QueryQuestsCompleted();
+
+-- MoP
+--		QueryQuestsCompleted();
+--		LootCount_DropCount_DB.QuestQuery=GetQuestsCompleted();
+--		DropCount:GetQuestNames();
+
 		DropCount.Loaded=0;
 		LCDC_ResultListScroll:DMClear();		-- Prep search-list
 		LCDC_VendorSearch_UseVendors:SetText("Vendors"); LCDC_VendorSearch_UseVendors:SetChecked(true);
@@ -991,7 +1289,7 @@ function DropCountXML:OnEvent(_,event,...)
 		elseif (entry.DB.Section=="Item") then
 			DropCount.Tooltip:MobList(entry.DB.Entry,nil,nil,nil,LCDC_VendorSearch.SearchTerm);
 		elseif (entry.DB.Section=="Creature") then
-			DropCount:SetLootlist(entry.DB.Entry,GameTooltip);
+			DropCount:SetLootlist(entry.DB.Entry,entry.DB.sguid,GameTooltip);
 		end
 	end
 	if (event=="DMEVENT_LISTBOX_ITEM_LEAVE") then
@@ -999,14 +1297,23 @@ function DropCountXML:OnEvent(_,event,...)
 	end
 	if (event=="DMEVENT_LISTBOX_ITEM_CLICKED") then
 		local entry=frame.DMTheList[index];
-		if (entry.DB.Section=="Vendor") then
-			GameTooltip:Hide();
-			DropCount.Tooltip:SetNPCContents(entry.DB.Entry,frame,GameTooltip,true);
-		elseif (entry.DB.Section=="Quest") then
-			GameTooltip:Hide();
-			DropCount.Tooltip:QuestList(CONST.MYFACTION,entry.DB.Entry,frame,GameTooltip);
-		elseif (entry.DB.Section=="Item") then
-			SetItemRef(entry.DB.Entry);
+		if (frame==LCDC_ListOfOptions_List) then
+			if (entry.DB.Base) then
+				_G["LootCount_DropCount_"..entry.DB.Base][entry.DB.Setting]=checked;
+				if (LootCount_DropCount_DB.GUILD) then LootCount_DropCount_DB.RAID=nil; end
+				if (LootCount_DropCount_DB.RAID) then LootCount_DropCount_DB.GUILD=nil; end
+				MT:Run("MM Plot",DropCount.MT.Icons.PlotMinimap);
+			end
+		else
+			if (entry.DB.Section=="Vendor") then
+				GameTooltip:Hide();
+				DropCount.Tooltip:SetNPCContents(entry.DB.Entry,frame,GameTooltip,true);
+			elseif (entry.DB.Section=="Quest") then
+				GameTooltip:Hide();
+				DropCount.Tooltip:QuestList(CONST.MYFACTION,entry.DB.Entry,frame,GameTooltip);
+			elseif (entry.DB.Section=="Item") then
+				SetItemRef(entry.DB.Entry);
+			end
 		end
 	end
 end
@@ -1026,10 +1333,10 @@ function DropCount.Hook:AddLocationData(frame,item)
 		local iData=DropCount.DB.Item:Read(ThisItem);
 		if (iData) then
 			local text="|cFFF89090B|cFFF09098e|cFFE890A0s|cFFE090A8t |cFFD890B0k|cFFD090B8n|cFFC890C0o|cFFC090C8w|cFFB890D0n |cFFB090D8a|cFFA890E0r|cFFA090E8e|cFF9890F0a: |cFF9090F8";
-			if (iData.BestW) then
-				frame:LCAddLine(text..iData.BestW.Location.." at "..iData.BestW.Score.."%",.6,.6,1,1);	-- 1=wrap text
-			elseif (iData.Best) then
+			if (iData.Best) then
 				frame:LCAddLine(text..iData.Best.Location.." at "..iData.Best.Score.."%",.6,.6,1,1);	-- 1=wrap text
+			elseif (iData.BestW) then
+				frame:LCAddLine(text..iData.BestW.Location.." at "..iData.BestW.Score.."%",.6,.6,1,1);	-- 1=wrap text
 			end
 		end
 		frame:Show();
@@ -1166,8 +1473,17 @@ function DropCount:ShowStats(length)
 	end
 end
 
+function DropCount:Length(t)
+	if (not t) then return 0; end
+	local count=0;
+	for _ in pairs(t) do count=count+1; end
+	return count;
+end
+
 function DropCount:GetQuestNames()
 	if (not LootCount_DropCount_DB.QuestQuery) then return; end
+	LootCount_DropCount_DB.TesterTable=self:CopyTable(LootCount_DropCount_DB.QuestQuery);
+--print("questquery:",self:Length(LootCount_DropCount_DB.QuestQuery));
 	if (not LootCount_DropCount_Character.DoneQuest) then
 		LootCount_DropCount_Character.DoneQuest={};
 	end
@@ -1189,6 +1505,7 @@ function DropCount:GetQuestNames()
 	for _,_ in pairs(LootCount_DropCount_DB.QuestQuery) do
 		DropCount.Tracker.ConvertQuests=DropCount.Tracker.ConvertQuests+1;
 	end
+--print("convertquests",DropCount.Tracker.ConvertQuests);
 
 	DropCount.Timer.PrevQuests=3;
 end
@@ -1444,7 +1761,7 @@ function DropCount.MT.Icons:PlotWorldmap()
 	local floorNum=GetCurrentMapDungeonLevel();
 	local ZoneName=LootCount_DropCount_Maps[GetLocale()]
 	if (ZoneName) then ZoneName=ZoneName[mapID]; end
-	local unit=DropCount.MT.Icons:BuildIconList(	ZoneName,
+	local unit=DropCount.MT.Icons:BuildIconList(	ZoneName,nil,
 									LootCount_DropCount_DB.BookWorldmap,
 									LootCount_DropCount_DB.ForgeWorldmap,
 									LootCount_DropCount_DB.QuestWorldmap,
@@ -1471,6 +1788,9 @@ function DropCount.MT.Icons:PlotWorldmap()
 			DropCountXML.Icon.WM[index].icon:SetVertexColor(1,1,1);
 		end
 		DropCountXML.Icon.WM[index].icon:SetAllPoints();
+if (not eTable.X or not eTable.Y) then
+	DropCount:Chat("Broken entry: "..eTable.Name.." - "..eTable.Type);
+end
 		DropCountXML.Icon.WM[index].Info={
 			Name=eTable.Name,
 			Type=eTable.Type,
@@ -1542,45 +1862,51 @@ function DropCount:ListZoneBooks()
 	if (not found) then DropCount:Chat(CONST.C_YELLOW.."No known books in "..here.."|r"); end
 end
 
-function DropCount.MT.Icons:BuildIconList(zn,bBook,bForge,bQuest,bVendor,bRepair,bTrainer)
+function DropCount.MT.Icons:BuildIconList(zn,minimal,bBook,bForge,bQuest,bVendor,bRepair,bTrainer)
 	local unit={};
 	-- Book
-	for book,vTable in pairs(LootCount_DropCount_DB.Book) do
-		for index,bTable in pairs(vTable) do
-			MT:Yield();
-			if (bTable.Zone and string.find(bTable.Zone,zn,1,true)==1) then
-				table.insert(unit,{Name=book,Type="Book",X=bTable.X,Y=bTable.Y,icon="Interface\\Spellbook\\Spellbook-Icon"});
+	if (bBook) then
+		for book,vTable in pairs(LootCount_DropCount_DB.Book) do
+			for index,bTable in pairs(vTable) do
+				MT:Yield();
+				if (bTable.Zone and string.find(bTable.Zone,zn,1,true)==1) then
+					table.insert(unit,{Name=book,Type="Book",X=bTable.X,Y=bTable.Y,icon="Interface\\Spellbook\\Spellbook-Icon"});
+				end
 			end
 		end
 	end
 	-- Forge
-	local raw=DropCount.DB.Forge:Read(zn);
-	if (raw) then
-		for forge,fRaw in pairs(raw) do
-			MT:Yield();
-			local x,y=fRaw:match("(.+)_(.+)"); x=tonumber(x); y=tonumber(y);
-			table.insert(unit,{Name="Forge",Type="Forge",X=x,Y=y,icon=CONST.PROFICON[5]});
+	if (bForge) then
+		local raw=DropCount.DB.Forge:Read(zn);
+		if (raw) then
+			for forge,fRaw in pairs(raw) do
+				MT:Yield();
+				local x,y=fRaw:match("(.+)_(.+)"); x=tonumber(x); y=tonumber(y);
+				table.insert(unit,{Name="Forge",Type="Forge",X=x,Y=y,icon=CONST.PROFICON[5]});
+			end
 		end
 	end
 	-- Quest
-	if (LootCount_DropCount_DB.Quest[CONST.MYFACTION]) then
-		for npc,nRaw in pairs(LootCount_DropCount_DB.Quest[CONST.MYFACTION]) do
-			MT:Yield();
-			if (DropCount.DB:PreCheck(nRaw,zn)) then
-				local nTable=DropCount.DB.Quest:Read(CONST.MYFACTION,npc);
-				if (nTable.Quests) then
-					if (nTable.Zone and string.find(nTable.Zone,zn,1,true)==1) then
-						local r,g,b=1,1,1;
-						local level=0;
-						for _,qTable in pairs(nTable.Quests) do
-							local state=DropCount:GetQuestStatus(qTable.ID,qTable.Quest);
-							if (state==CONST.QUEST_NOTSTARTED and level<3) then r,g,b=0,1,0; level=3; end
-							if (state==CONST.QUEST_STARTED and level<2) then r,g,b=1,1,1; level=2; end
-							if (state==CONST.QUEST_DONE and level<1) then r,g,b=0,0,0; level=1; end
-							if (state==CONST.QUEST_UNKNOWN) then r,g,b=1,0,0; level=100; end
-						end
-						if (level>1) then
-							table.insert(unit,{Name=npc,Type="Quest",X=nTable.X,Y=nTable.Y,r=r,g=g,b=b,icon="Interface\\QuestFrame\\UI-Quest-BulletPoint"});
+	if (bQuest) then
+		if (LootCount_DropCount_DB.Quest[CONST.MYFACTION]) then
+			for npc,nRaw in pairs(LootCount_DropCount_DB.Quest[CONST.MYFACTION]) do
+				MT:Yield();
+				if (DropCount.DB:PreCheck(nRaw,zn)) then
+					local nTable=DropCount.DB.Quest:Read(CONST.MYFACTION,npc);
+					if (nTable.Quests) then
+						if (nTable.Zone and string.find(nTable.Zone,zn,1,true)==1) then
+							local r,g,b=1,1,1;
+							local level=0;
+							for _,qTable in pairs(nTable.Quests) do
+								local state=DropCount:GetQuestStatus(qTable.ID,qTable.Quest);
+								if (state==CONST.QUEST_NOTSTARTED and level<3) then r,g,b=0,1,0; level=3; end
+								if (state==CONST.QUEST_STARTED and level<2) then r,g,b=1,1,1; level=2; end
+								if (state==CONST.QUEST_DONE and level<1) then r,g,b=0,0,0; level=1; end
+								if (state==CONST.QUEST_UNKNOWN) then r,g,b=1,0,0; level=100; end
+							end
+							if (level>1 or not minimal) then
+								table.insert(unit,{Name=npc,Type="Quest",State=state,X=nTable.X,Y=nTable.Y,r=r,g=g,b=b,icon="Interface\\QuestFrame\\UI-Quest-BulletPoint"});
+							end
 						end
 					end
 				end
@@ -1588,36 +1914,40 @@ function DropCount.MT.Icons:BuildIconList(zn,bBook,bForge,bQuest,bVendor,bRepair
 		end
 	end
 	-- Vendor
-	for vendor,vRaw in pairs(LootCount_DropCount_DB.Vendor) do
-		MT:Yield();
-		if (DropCount.DB:PreCheck(vRaw,zn)) then
-			local x,y,zone,faction,repair=DropCount.DB.Vendor:ReadBaseData(vendor);
-			if (faction=="Neutral" or faction==CONST.MYFACTION) then
-				if (LootCount_DropCount_DB.VendorMinimap or (LootCount_DropCount_DB.RepairMinimap and repair)) then
-					if (zone and string.find(zone,zn,1,true)==1) then
-						local texture="Interface\\GROUPFRAME\\UI-Group-MasterLooter";
-						if (repair) then texture="Interface\\GossipFrame\\VendorGossipIcon"; end
-						table.insert(unit,{Name=vendor,Type="Vendor",X=x,Y=y,icon=texture});
+	if (bVendor or bRepair) then
+		for vendor,vRaw in pairs(LootCount_DropCount_DB.Vendor) do
+			MT:Yield();
+			if (DropCount.DB:PreCheck(vRaw,zn)) then
+				local x,y,zone,faction,repair=DropCount.DB.Vendor:ReadBaseData(vendor);
+				if (faction=="Neutral" or faction==CONST.MYFACTION) then
+					if (bVendor or (bRepair and repair)) then
+						if (zone and string.find(zone,zn,1,true)==1) then
+							local texture="Interface\\GROUPFRAME\\UI-Group-MasterLooter";
+							if (repair) then texture="Interface\\GossipFrame\\VendorGossipIcon"; end
+							table.insert(unit,{Name=vendor,Type="Vendor",X=x,Y=y,icon=texture});
+						end
 					end
 				end
 			end
 		end
 	end
 	-- Trainer
-	if (LootCount_DropCount_DB.Trainer[CONST.MYFACTION]) then
-		for npc,nRaw in pairs(LootCount_DropCount_DB.Trainer[CONST.MYFACTION]) do
-			MT:Yield();
-			if (DropCount.DB:PreCheck(nRaw,zn)) then
-				local nTable=DropCount.DB.Trainer:Read(npc);
-				if (nTable.Zone and string.find(nTable.Zone,zn,1,true)==1) then
-					local texture="Interface\\Icons\\INV_Misc_QuestionMark";
-					for index,prof in pairs(CONST.PROFESSIONS) do
-						if (prof==nTable.Service or prof:find(nTable.Service) or nTable.Service:find(prof)) then
-							texture=CONST.PROFICON[index];
-							break;
+	if (bTrainer) then
+		if (LootCount_DropCount_DB.Trainer[CONST.MYFACTION]) then
+			for npc,nRaw in pairs(LootCount_DropCount_DB.Trainer[CONST.MYFACTION]) do
+				MT:Yield();
+				if (DropCount.DB:PreCheck(nRaw,zn)) then
+					local nTable=DropCount.DB.Trainer:Read(npc);
+					if (nTable.Zone and string.find(nTable.Zone,zn,1,true)==1) then
+						local texture="Interface\\Icons\\INV_Misc_QuestionMark";
+						for index,prof in pairs(CONST.PROFESSIONS) do
+							if (prof==nTable.Service or prof:find(nTable.Service) or nTable.Service:find(prof)) then
+								texture=CONST.PROFICON[index];
+								break;
+							end
 						end
+						table.insert(unit,{Name=npc,Service=nTable.Service,Type="Trainer",X=nTable.X,Y=nTable.Y,icon=texture});
 					end
-					table.insert(unit,{Name=npc,Service=nTable.Service,Type="Trainer",X=nTable.X,Y=nTable.Y,icon=texture});
 				end
 			end
 		end
@@ -1628,7 +1958,7 @@ end
 
 function DropCount.MT.Icons:PlotMinimap()
 	local mapID,floorNum,ZoneName,SubZone=DropCount.Map:ForDatabase();	-- Map helpers
-	local unit=DropCount.MT.Icons:BuildIconList(	ZoneName,
+	local unit=DropCount.MT.Icons:BuildIconList(	ZoneName,true,
 									LootCount_DropCount_DB.BookMinimap,
 									LootCount_DropCount_DB.ForgeMinimap,
 									LootCount_DropCount_DB.QuestMinimap,
@@ -1639,7 +1969,7 @@ function DropCount.MT.Icons:PlotMinimap()
 	local index;
 	for index,eTable in pairs(DropCountXML.Icon.MM) do Astrolabe:RemoveIconFromMinimap(DropCountXML.Icon.MM[index]); end
 	for index,eTable in pairs(unit) do
-		MT:Yield();
+		MT:Yield(true);
 		if (not _G["LCDC_MinimapIcon"..index]) then
 			DropCountXML.Icon.MM[index]=CreateFrame("Button","LCDC_MinimapIcon"..index,UIParent,"LCDC_VendorFlagTemplate");
 			DropCountXML.Icon.MM[index].icon=DropCountXML.Icon.MM[index]:CreateTexture("ARTWORK");
@@ -1653,6 +1983,9 @@ function DropCount.MT.Icons:PlotMinimap()
 			DropCountXML.Icon.MM[index].icon:SetVertexColor(1,1,1);
 		end
 		DropCountXML.Icon.MM[index].icon:SetAllPoints();
+if (not eTable.X or not eTable.Y) then
+	DropCount:Chat("Broken entry: "..eTable.Name.." - "..eTable.Type);
+end
 		DropCountXML.Icon.MM[index].Info={
 			Name=eTable.Name,
 			Type=eTable.Type,
@@ -1692,6 +2025,7 @@ function DropCount.DB.Quest:Read(faction,npc,base)
 end
 
 function DropCount.DB.Quest:Write(npc,nData,faction)
+	if (LootCount_DropCount_DB.DontFollowQuests) then return; end
 	if (not faction) then faction=CONST.MYFACTION; end
 	if (not LootCount_DropCount_DB.Quest[faction]) then LootCount_DropCount_DB.Quest[faction]={}; end
 	Table:Write(DM_WHO,npc,nData,LootCount_DropCount_DB.Quest[faction],"Quest");
@@ -1710,6 +2044,7 @@ function DropCount.DB.Vendor:Read(npc,base)
 end
 
 function DropCount.DB.Vendor:Write(npc,nData)
+	if (LootCount_DropCount_DB.DontFollowVendors) then return; end
 	Table:Write(DM_WHO,npc,nData,LootCount_DropCount_DB.Vendor,"Vendor");
 end
 
@@ -1721,6 +2056,7 @@ function DropCount.DB.Trainer:Read(name,base,faction)
 end
 
 function DropCount.DB.Trainer:Write(npc,nData,faction)
+	if (LootCount_DropCount_DB.DontFollowTrainers) then return; end
 	if (not faction) then faction=CONST.MYFACTION; end
 	if (not LootCount_DropCount_DB.Trainer[faction]) then LootCount_DropCount_DB.Trainer[faction]={}; end
 	Table:Write(DM_WHO,npc,nData,LootCount_DropCount_DB.Trainer[faction],"Trainer");
@@ -1732,10 +2068,12 @@ function DropCount.DB.Forge:Read(area,base)
 end
 
 function DropCount.DB.Forge:Write(area,nData)
+	if (LootCount_DropCount_DB.DontFollowForges) then return; end
 	Table:Write(DM_WHO,area,nData,LootCount_DropCount_DB.Forge,"Forge");
 end
 
 function DropCount.DB.Count:Write(mob,nData,base)
+	if (LootCount_DropCount_DB.DontFollowMobsAndDrops) then return; end
 	if (not base) then base=LootCount_DropCount_DB.Count; end
 	Table:Write(DM_WHO,mob,nData,base,"Count");
 end
@@ -1746,11 +2084,12 @@ function DropCount.DB.Count:Read(mob,base)
 end
 
 function DropCount.DB.Item:Write(item,iData,base)
+	if (LootCount_DropCount_DB.DontFollowMobsAndDrops) then return; end
 	if (not base) then base=LootCount_DropCount_DB.Item; end
 	Table:Write(DM_WHO,item,iData,base,"Item");
 end
 
-function DropCount.DB.Item:ReadByName(name)
+function DropCount.DB.Item:ReadByName(name,dummy)
 	if (not LootCount_DropCount_DB.Item) then return nil; end
 	for item,iRaw in pairs(LootCount_DropCount_DB.Item) do
 		if (iRaw:find(name,1,true)) then
@@ -1917,7 +2256,7 @@ end
 function DropCount.Com:ParseMessage(text,sender)
 	local header,guid,mob,item,count,source=strsplit(COM.SEPARATOR,text);
 	if (header==COM.MOBKILL) then
-		DropCount:AddKill(nil,guid,mob,nil,nil,true,item);
+		DropCount:AddKill(nil,guid,guid:sub(7,10),mob,nil,nil,true,item);
 		if (DropCount.Debug) then
 			DropCount:Chat(sender.." kill: \'"..mob.."\'",0,1,0);
 		end
@@ -1926,10 +2265,10 @@ function DropCount.Com:ParseMessage(text,sender)
 		if (source=="SKIN") then
 			DropCount.Profession=source;
 			if (not DropCount.Com:HaveReceivedSkin(guid)) then
-				DropCount.Target.UnSkinned=mob;
+				DropCount.Target.UnSkinned=guid:sub(7,10);
 			end
 		end
-		DropCount:AddLoot(guid,mob,item,count,true);
+		DropCount:AddLoot(guid,guid:sub(7,10),mob,item,count,true);
 		local itemname=GetItemInfo(item);
 		if (not itemname) then _,itemname=DropCount:GetID(item); end
 		if (DropCount.Debug) then
@@ -1983,8 +2322,8 @@ function DropCount:GetPlayerPosition()
 	return posX,posY;
 end
 
-function DropCount:AddKill(oma,GUID,mob,reservedvariable,noadd,notransmit,otherzone)
-	if (not mob) then return; end
+function DropCount:AddKill(oma,GUID,sguid,mob,reservedvariable,noadd,notransmit,otherzone)
+	if (not mob and not sguid) then return; end
 	-- Check if already counted
 	local i=DropCount.Tracker.QueueSize;
 	while (i>0) do
@@ -1993,26 +2332,29 @@ function DropCount:AddKill(oma,GUID,mob,reservedvariable,noadd,notransmit,otherz
 	end
 
 	local now=time();
-	local mTable=DropCount.DB.Count:Read(mob);
+	local mTable=DropCount.DB.Count:Read(sguid);
 	if (not mTable) then mTable={ Kill=0 }; end
+	if (not mTable.Name) then mTable.Name=mob; end
+--	mob=mTable.Name;
 	if (not otherzone) then otherzone=DropCount:GetFullZone(); end
 	mTable.Zone=otherzone;		-- Set zone for last kill
 	if (not noadd) then
 		if (not mTable.Kill) then mTable.Kill=0; end
 		mTable.Kill=mTable.Kill+1;
 		if (not nagged) then
-			if ((mTable.Kill<=50 and mod(mTable.Kill,25)==0) or mTable.Kill==(math.floor(mTable.Kill/100)*100)) then
-				DropCount:Chat(CONST.C_BASIC.."DropCount: "..CONST.C_YELLOW..mob..CONST.C_BASIC.." has been killed "..CONST.C_YELLOW..mTable.Kill..CONST.C_BASIC.." times!");
+			if (mTable.Name and ((mTable.Kill<=50 and mod(mTable.Kill,25)==0) or mTable.Kill==(math.floor(mTable.Kill/100)*100))) then
+				DropCount:Chat(CONST.C_BASIC.."DropCount: "..CONST.C_YELLOW..mTable.Name..CONST.C_BASIC.." has been killed "..CONST.C_YELLOW..mTable.Kill..CONST.C_BASIC.." times!");
 				DropCount:Chat(CONST.C_BASIC.."Please consider sending your SavedVariables file to "..CONST.C_YELLOW.."dropcount@ybeweb.com"..CONST.C_BASIC.." to help develop the DropCount addon.");
 				nagged=true;
 			end
 		end
-		if (not notransmit) then DropCount.Com:Transmit(GUID,mob); end
-		DropCount.DB.Count:Write(mob,mTable);
+		if (not notransmit) then DropCount.Com:Transmit(GUID,sguid); end
+		DropCount.DB.Count:Write(sguid,mTable);
 	else
-		DropCount.DB.Count:Write(mob,mTable);
+		DropCount.DB.Count:Write(sguid,mTable);
 		return;
 	end
+	if (not mob) then return; end
 
 	DropCount.Tracker.QueueSize=DropCount.Tracker.QueueSize+1;
 	DropCount.Tracker.TimedQueue[DropCount.Tracker.QueueSize]={};
@@ -2071,7 +2413,7 @@ function DropCount:AddKill(oma,GUID,mob,reservedvariable,noadd,notransmit,otherz
 	end
 end
 
-function DropCount:AddLootMob(GUID,mob,item)
+function DropCount:AddLootMob(GUID,sguid,mob,item)
 	local nameTable;
 	local iTable=DropCount.DB.Item:Read(item);
 	if (DropCount.Profession) then
@@ -2082,16 +2424,17 @@ function DropCount:AddLootMob(GUID,mob,item)
 		nameTable=iTable.Name;
 	end
 	-- New stuff, so make database ready
-	if (not nameTable[mob]) then		-- Mob not in drop-list
-		nameTable[mob]=0;				-- Not looted, but make entry (will be added later)
+	if (not nameTable[sguid]) then		-- Mob not in drop-list
+		nameTable[sguid]=0;				-- Not looted, but make entry (will be added later)
 	end
 	DropCount.DB.Item:Write(item,iTable);
-	if (not LootCount_DropCount_DB.Count[mob]) then					-- Mob not in kill-list
-		DropCount:AddKill(nil,GUID,mob,nil,true,true,"");	-- Add it with zero kills
+	if (not LootCount_DropCount_DB.Count[sguid]) then		-- Mob not in kill-list
+		DropCount:AddKill(nil,GUID,sguid,mob,nil,true,true,"");	-- Add it with zero kills
 	end
 end
 
-function DropCount:AddLoot(GUID,mob,item,count,notransmit)
+--		DropCount:AddLoot(guid,sguid,nil,list[i].Item,list[i].Count);
+function DropCount:AddLoot(GUID,sguid,mob,item,count,notransmit)
 	if (not notransmit) then DropCount.Com:Transmit(GUID,mob,item,count,DropCount.Profession); end
 	local now=time();
 	local iTable=DropCount.DB.Item:Read(item);
@@ -2100,7 +2443,7 @@ function DropCount:AddLoot(GUID,mob,item,count,notransmit)
 	iTable.Item=itemName;
 	iTable.Time=now;				-- Last point in time for loot of this item
 	DropCount.DB.Item:Write(item,iTable);
-	DropCount:AddLootMob(GUID,mob,item);			-- Make register
+	DropCount:AddLootMob(GUID,sguid,mob,item);			-- Make register
 	iTable=DropCount.DB.Item:Read(item,nil,true);
 	local skinning=nil;
 	local nameTable;
@@ -2110,22 +2453,25 @@ function DropCount:AddLoot(GUID,mob,item,count,notransmit)
 	else
 		nameTable=iTable.Name;
 	end
-	nameTable[mob]=nameTable[mob]+count;
+	nameTable[sguid]=nameTable[sguid]+count;
 	DropCount.DB.Item:Write(item,iTable);
 
 	if (skinning) then		-- Skinner-loot, so add it as a skinning-kill
-		if (DropCount.Target.UnSkinned and DropCount.Target.UnSkinned==mob) then
-			local mTable=DropCount.DB.Count:Read(mob);
-			if (not mTable.Skinning) then mTable.Skinning=0; end
-			mTable.Skinning=mTable.Skinning+1;
-			DropCount.Target.UnSkinned=nil;					-- Added, so next loot on this target is more than one items from same skinning
-			DropCount.DB.Count:Write(mob,mTable);
+		if (DropCount.Target.UnSkinned and DropCount.Target.UnSkinned==sguid) then
+			local mTable=DropCount.DB.Count:Read(sguid);
+			if (mTable) then
+				if (not mTable.Skinning) then mTable.Skinning=0; end
+				mTable.Skinning=mTable.Skinning+1;
+--print("skinning +1 for",sguid);
+				DropCount.Target.UnSkinned=nil;					-- Added, so next loot on this target is more than one items from same skinning
+				DropCount.DB.Count:Write(sguid,mTable);
+			end
 		end
 	end
-	if (DropCount.Registered) then LootCountAPI.Force(LOOTCOUNT_DROPCOUNT); end
+	if (DropCount.LootCount.Registered) then LootCountAPI.Force(LOOTCOUNT_DROPCOUNT); end
 end
 
-function DropCount:GetRatio(item,mob)
+function DropCount:GetRatio(item,sguid)
 	if (CONST.QUESTID) then
 		local _,_,_,_,_,itemtype=GetItemInfo(item);
 		local _,itemID=DropCount:GetID(item);
@@ -2138,18 +2484,18 @@ function DropCount:GetRatio(item,mob)
 	if (not LootCount_DropCount_DB.Item[item]) then return 0,0,true; end
 	local iTable=DropCount.DB.Item:Read(item);
 	if (not iTable.Name and not iTable.Skinning) then return 0,0,true; end
-	if (iTable.Name and not iTable.Name[mob]) then nRatio=0; end
-	if (iTable.Skinning and not iTable.Skinning[mob]) then sRatio=0; end
-	if (not LootCount_DropCount_DB.Count[mob]) then return 0,0,true; end
+	if (iTable.Name and not iTable.Name[sguid]) then nRatio=0; end
+	if (iTable.Skinning and not iTable.Skinning[sguid]) then sRatio=0; end
+	if (not LootCount_DropCount_DB.Count[sguid]) then return 0,0,true; end
 
-	local mTable=DropCount.DB.Count:Read(mob);
+	local mTable=DropCount.DB.Count:Read(sguid);
 	if (iTable.Name) then
 		nKills=mTable.Kill;
 		if (not nKills or nKills<1) then nRatio=0;
 		else
-			if (iTable.Name[mob]) then
-				nRatio=iTable.Name[mob]/nKills;
-				if (iTable.Name[mob]<2) then unsafe=true; end
+			if (iTable.Name[sguid]) then
+				nRatio=iTable.Name[sguid]/nKills;
+				if (iTable.Name[sguid]<2) then unsafe=true; end
 			else
 				nRatio=0;
 			end
@@ -2160,9 +2506,9 @@ function DropCount:GetRatio(item,mob)
 		sKills=mTable.Skinning;
 		if (not sKills or sKills<1) then sRatio=0;
 		else
-			if (iTable.Skinning[mob]) then
-				sRatio=iTable.Skinning[mob]/sKills;
-				if (iTable.Skinning[mob]<2) then unsafe=true; end
+			if (iTable.Skinning[sguid]) then
+				sRatio=iTable.Skinning[sguid]/sKills;
+				if (iTable.Skinning[sguid]<2) then unsafe=true; end
 			else
 				sRatio=0;
 			end
@@ -2196,7 +2542,7 @@ function DropCount.LootCount.UpdateButton(button)
 		end
 	end
 
-	if (DropCount.Registered) then LootCountAPI.SetData(LOOTCOUNT_DROPCOUNT,button,DropCount:FormatPst(ratio),goalvalue); end
+	if (DropCount.LootCount.Registered) then LootCountAPI.SetData(LOOTCOUNT_DROPCOUNT,button,DropCount:FormatPst(ratio),goalvalue); end
 end
 
 function DropCount:TimedQueueRatio(item)
@@ -2410,24 +2756,41 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down,highlight)
 	local _,_,_,colour=GetItemQualityColor(rarity); colour="|c"..colour;
 	if (button.FreeFloat) then GameTooltip:SetOwner(UIParent,"ANCHOR_CURSOR");
 	else GameTooltip:SetOwner(button,"ANCHOR_RIGHT"); end
-	GameTooltip:SetText(colour.."["..DropCount:Highlight(itemname,highlight,colour).."]|r:");
+	local iTable=DropCount.DB.Item:Read(button.User.itemID);
+	local skinningdrop=iTable.Skinning;
+	local normaldrop=iTable.Name;
+	local scrap=colour.."["..DropCount:Highlight(itemname,highlight,colour).."]|r:";
+	if (LootCount_DropCount_Character.CompactView) then
+		if (skinningdrop) then
+			if (normaldrop) then scrap=scrap.." (L/|cFFFF00FFP|r)"; else scrap=scrap.." (|cFFFF00FFP|r)"; end
+		end
+	end
+	GameTooltip:SetText(scrap);
 	local currentzone=GetRealZoneText();
 	if (not currentzone) then
 		currentzone="";
 	elseif (LootCount_DropCount_Character.ShowZoneMobs) then
-		GameTooltip:LCAddDoubleLine("Showing mobs from "..currentzone.." only","",0,1,1,0,1,1);
+		if (LootCount_DropCount_Character.CompactView) then scrap="("..currentzone..")";
+		else scrap="Showing mobs from "..currentzone.." only"; end
+		GameTooltip:LCAddLine(scrap,0,1,1);
 	end
-	local iTable=DropCount.DB.Item:Read(button.User.itemID);
-	local skinningdrop=iTable.Skinning;
-	local normaldrop=iTable.Name;
-	if (skinningdrop) then
-		if (normaldrop) then GameTooltip:LCAddDoubleLine("Loot and |cFFFF00FFprofession","",1,1,1,1,1,1);
-		else GameTooltip:LCAddDoubleLine("Profession","",1,0,1,1,0,1); end
+	if (not LootCount_DropCount_Character.CompactView) then
+		if (skinningdrop) then
+			if (normaldrop) then scrap="Loot and |cFFFF00FFprofession"; else scrap="Profession"; end
+			GameTooltip:LCAddLine(scrap,1,0,1);
+		end
 	end
 	if (iTable.Best) then
-		GameTooltip:LCAddDoubleLine("Best drop-area:",DropCount:Highlight(iTable.Best.Location,highlight).." ("..iTable.Best.Score..")",0,1,1,0,1,1);
-		if (iTable.BestW) then
-			GameTooltip:LCAddDoubleLine(" ",DropCount:Highlight(iTable.BestW.Location,highlight).." ("..iTable.BestW.Score..")",0,1,1,0,1,1);
+		if (not LootCount_DropCount_Character.CompactView) then
+			GameTooltip:LCAddDoubleLine("Best drop-area:",DropCount:Highlight(iTable.Best.Location,highlight).." ("..iTable.Best.Score.."\%)",0,1,1,0,1,1);
+			if (iTable.BestW) then
+				GameTooltip:LCAddDoubleLine(" ",DropCount:Highlight(iTable.BestW.Location,highlight).." ("..iTable.BestW.Score.."\%)",0,1,1,0,1,1);
+			end
+		else
+			GameTooltip:LCAddLine(DropCount:Highlight(iTable.Best.Location,highlight).." ("..iTable.Best.Score.."\%)",0,1,1);
+			if (iTable.BestW) then
+				GameTooltip:LCAddLine(DropCount:Highlight(iTable.BestW.Location,highlight).." ("..iTable.BestW.Score.."\%)",0,1,1);
+			end
 		end
 	end
 
@@ -2458,7 +2821,7 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down,highlight)
 			local mTable=DropCount.DB.Count:Read(mob);
 			if (not mTable) then
 --DropCount:Chat(mob.." does not exist (drop)",1);
-				DropCount:RemoveFromItem("Name",mob);
+				DropCount:RemoveFromItems("Name",mob);
 			else
 				if (mTable.Kill) then
 					list[line].Count=mTable.Kill;
@@ -2472,11 +2835,12 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down,highlight)
 				list[line].ratio=DropCount:GetRatio(button.User.itemID,mob);	-- Normal
 
 				local zone="";
-				if (LootCount_DropCount_Character.ShowZone and mTable.Zone) then
+				if (not LootCount_DropCount_Character.CompactView and mTable.Zone) then
 					zone=" |cFF0060FF("..DropCount:Highlight(mTable.Zone,highlight,"|cFF0060FF")..")";
 				end
 
-				list[line].Ltext=colour..pretext..DropCount:Highlight(mob,highlight,colour)..zone.."|r: ";
+				local mobName=DropCount.DB.Count:Read(mob).Name or mob;
+				list[line].Ltext=colour..pretext..DropCount:Highlight(mobName,highlight,colour)..zone.."|r: ";
 				list[line].Show=Show;
 				if (LootCount_DropCount_Character.ShowZoneMobs and mTable.Zone and currentzone and string.find(mTable.Zone,currentzone,1,true)~=1) then
 					list[line]=nil;
@@ -2509,7 +2873,7 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down,highlight)
 			local mTable=DropCount.DB.Count:Read(mob);
 			if (not mTable) then
 --DropCount:Chat(mob.." does not exist (skinning)",1);
-				DropCount:RemoveFromItem("Skinning",mob);
+				DropCount:RemoveFromItems("Skinning",mob);
 			else
 				if (mTable.Skinning) then
 					list[line].Count=mTable.Skinning;
@@ -2523,11 +2887,12 @@ function DropCount.Tooltip:MobList(button,plugin,limit,down,highlight)
 				_,list[line].ratio=DropCount:GetRatio(button.User.itemID,mob); -- Skinning
 
 				local zone="";
-				if (LootCount_DropCount_Character.ShowZone and mTable.Zone) then
+				if (not LootCount_DropCount_Character.CompactView and mTable.Zone) then
 					zone=" |cFF0060FF("..DropCount:Highlight(mTable.Zone,highlight,"|cFF0060FF")..")";
 				end
 
-				list[line].Ltext=colour..pretext..DropCount:Highlight(mob,highlight,colour)..zone.."|r";
+				local mobName=DropCount.DB.Count:Read(mob).Name or mob;
+				list[line].Ltext=colour..pretext..DropCount:Highlight(mobName,highlight,colour)..zone.."|r: ";
 				if (normaldrop) then list[line].Ltext="|cFFFF00FF*|r "..list[line].Ltext; end
 				list[line].Show=Show;
 				if (LootCount_DropCount_Character.ShowZoneMobs and mTable.Zone and currentzone and string.find(mTable.Zone,currentzone,1,true)~=1) then
@@ -2746,12 +3111,7 @@ function DropCount.Tooltip:SetNPCContents(unit,parent,frame,force)
 	if (not force) then
 		if (LootCount_DropCount_DB.Quest and LootCount_DropCount_DB.Quest[CONST.MYFACTION]) then
 			if (LootCount_DropCount_DB.Quest[CONST.MYFACTION][unit]) then
---			for npc,nTable in pairs(LootCount_DropCount_DB.Quest[CONST.MYFACTION]) do
---				if (npc==unit) then
---					breakit=true;
-					DropCount.Tooltip:QuestList(CONST.MYFACTION,unit,parent,frame);
---				end
---				if (breakit) then break; end
+				DropCount.Tooltip:QuestList(CONST.MYFACTION,unit,parent,frame);
 			end
 		end
 	end
@@ -2808,32 +3168,43 @@ function DropCount.Tooltip:SetNPCContents(unit,parent,frame,force)
 	frame:Show();
 end
 
-function DropCount:SetLootlist(unit,AltTT)
-	if (not LootCount_DropCount_DB.Count[unit]) then
+function DropCount:SetLootlist(unit,sguid,AltTT,compact)
+-- MoP
+	if (LootCount_DropCount_DB.Count[unit]) then DropCount.WoW5:ConvertMOB(unit,sguid); end
+
+	if (not LootCount_DropCount_DB.Count[sguid]) then
 		DropCount.Tooltip:SetNPCContents(unit);
 		return;
 	end
 
-	if (not AltTT) then AltTT=LootCount_DropCount_TT; end
+	if (type(AltTT)~="table") then
+		compact=AltTT;
+		AltTT=LootCount_DropCount_TT;
+	end
 	AltTT:ClearLines();
 	AltTT:SetOwner(UIParent,"ANCHOR_CURSOR");
-	AltTT:SetText(unit);
 	local text="";
-	local mTable=DropCount.DB.Count:Read(unit);
-	LootCount_DropCount_Character.MouseOver=DropCount:CopyTable(mTable);
-
-	if (mTable.Skinning and mTable.Skinning>0) then text="Profession-loot: "..mTable.Skinning.." times"; end
+	local mTable=DropCount.DB.Count:Read(sguid);
 	if (not mTable.Kill) then mTable.Kill=0; end
-	AltTT:LCAddDoubleLine(mTable.Kill.." kills",text,.4,.4,1,1,0,1);
+	LootCount_DropCount_Character.MouseOver=DropCount:CopyTable(mTable);
+	if (not LootCount_DropCount_Character.CompactView) then
+		AltTT:SetText(unit);
+		if (mTable.Skinning and mTable.Skinning>0) then text="Profession-loot: "..mTable.Skinning.." times"; end
+		AltTT:LCAddDoubleLine(mTable.Kill.." kills",text,.4,.4,1,1,0,1);
+	else
+		text=unit.." |cFF6666FFK:"..mTable.Kill;
+		if (mTable.Skinning and mTable.Skinning>0) then text=text.." |cFFFF00FFP:"..mTable.Skinning; end
+		AltTT:SetText(text);
+	end
 
 	local list={};
 	local line=1;
 	local missingitems=0;
 	local itemsinlist=nil;
 	for item,iData in pairs(LootCount_DropCount_DB.Item) do
-		if (iData:find(unit,1,true)) then		-- Plain search
+		if (iData:find(sguid,1,true)) then		-- Plain search
 			local iTable=DropCount.DB.Item:Read(item);
-			if (iTable.Name and iTable.Name[unit]) then
+			if (iTable.Name and iTable.Name[sguid]) then
 				local itemname,_,rarity,_,_,itemtype=GetItemInfo(item);
 				local questitem=nil;
 				if (CONST.QUESTID) then
@@ -2844,23 +3215,23 @@ function DropCount:SetLootlist(unit,AltTT)
 				if (not itemname or not rarity) then
 					DropCount.Cache:AddItem(item);
 					missingitems=missingitems+1;
-				elseif (LootCount_DropCount_Character.ShowSingle or questitem or iTable.Name[unit]~=1) then
+				elseif (LootCount_DropCount_Character.ShowSingle or questitem or iTable.Name[sguid]~=1) then
 					local _,_,_,colour=GetItemQualityColor(rarity); colour="|c"..colour;
-					local thisratio,_,thissafe=DropCount:GetRatio(item,unit);
+					local thisratio,_,thissafe=DropCount:GetRatio(item,sguid);
 					list[line]={ Ltext=colour.."["..itemname.."]|r: ", ratio=thisratio, NoSafe=thissafe };
 					if (iTable.Quest) then list[line].Quests=DropCount:CopyTable(iTable.Quest); end
 					line=line+1;
 					itemsinlist=true;
 				end
 			end
-			if (iTable.Skinning and iTable.Skinning[unit]) then
+			if (iTable.Skinning and iTable.Skinning[sguid]) then
 				local itemname,_,rarity=GetItemInfo(item);
 				if (not itemname or not rarity) then
 					DropCount.Cache:AddItem(item);
 					missingitems=missingitems+1;
 				else
 					local _,_,_,colour=GetItemQualityColor(rarity); colour="|c"..colour;
-					local _,thisratio,thissafe=DropCount:GetRatio(item,unit);
+					local _,thisratio,thissafe=DropCount:GetRatio(item,sguid);
 					list[line]={ Ltext=colour.."["..itemname.."]|r: ", ratio=thisratio, NoSafe=thissafe };
 					list[line].Ltext="|cFFFF00FF*|r "..list[line].Ltext;	-- AARRGGBB
 					if (iData.Quest) then list[line].Quests=DropCount:CopyTable(iData.Quest); end
@@ -2885,7 +3256,7 @@ function DropCount:SetLootlist(unit,AltTT)
 	line=1;
 	while(list[line]) do
 		AltTT:LCAddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
-		if (list[line].Quests) then
+		if (((compact and IsShiftKeyDown()) or not compact) and list[line].Quests) then
 			for quest,amount in pairs(list[line].Quests) do
 				if (LootCount_DropCount_DB.Quest and LootCount_DropCount_DB.Quest[CONST.MYFACTION]) then
 					for npc,rawData in pairs(LootCount_DropCount_DB.Quest[CONST.MYFACTION]) do
@@ -2894,7 +3265,11 @@ function DropCount:SetLootlist(unit,AltTT)
 							if (qData.Quests) then
 								for _,qListData in ipairs(qData.Quests) do
 									if (qListData.Quest==quest) then
-										AltTT:LCAddSmallLine("   "..amount.." for "..quest.." ("..qListData.Header..")",.5,.3,.2);
+										if (not qListData.Header) then
+											AltTT:LCAddSmallLine("   "..amount.." for "..quest,.5,.3,.2);
+										else
+											AltTT:LCAddSmallLine("   "..amount.." for "..quest.." ("..qListData.Header..")",.5,.3,.2);
+										end
 										AltTT:LCAddSmallLine("   |cFFFFFF00   ! |r"..npc.." ("..qData.Zone.." - "..math.floor(qData.X)..","..math.floor(qData.Y)..")",.5,.3,.2);
 									end
 								end
@@ -2968,164 +3343,151 @@ end
 
 function DropCountXML:GUI_Search()
 	local find=LCDC_VendorSearch_FindText:GetText();
-	find=strtrim(find); if (find=="") then return; end
 	LCDC_ResultListScroll:DMClear();
+	LCDC_VendorSearch.SearchTerm=find;
+
+	DropCount.Search:Do(LCDC_VendorSearch_FindText:GetText(),
+						LCDC_VendorSearch_UseVendors:GetChecked(),
+						LCDC_VendorSearch_UseQuests:GetChecked(),
+						LCDC_VendorSearch_UseBooks:GetChecked(),
+						LCDC_VendorSearch_UseItems:GetChecked(),
+						LCDC_VendorSearch_UseMobs:GetChecked(),
+						LCDC_VendorSearch_UseTrainers:GetChecked());
+
+	for section,sTable in pairs(DropCount.Search._result) do
+		local xml=LCDC_ResultListScroll:DMAdd(section,nil,-1);
+		xml.Tooltip=nil;
+		wipe(xml.DB);
+		for _,entry in pairs(sTable) do
+			xml=LCDC_ResultListScroll:DMAdd(entry.Entry,nil,0,entry.Icon);
+			if (xml) then
+				xml.Tooltip=entry.Tooltip;
+				wipe(xml.DB); xml.DB=nil;
+				xml.DB=entry.DB;
+			end
+		end
+	end
+end
+
+DropCount.Search={ _section="", _result={}, };
+
+function DropCount.Search:Found(section,entry,tooltip,db,icon)
+	if (not self._result[section]) then self._result[section]={}; end
+	table.insert(self._result[section],{ Entry=entry, Tooltip=tooltip, DB=db, Icon=icon });
+end
+
+function DropCount.Search:Do(find,uVen,uQue,uBoo,uIte,uMob,uTra)
+	find=strtrim(find); if (find=="") then return; end
 	if (not find) then return; end
 	find=find:lower();
-	LCDC_VendorSearch.SearchTerm=find;
+	wipe(self._result);
 
 	-- Search vendors
 	local entry;
 	local started=nil;
-	if (LCDC_VendorSearch_UseVendors:GetChecked()) then
+	if (uVen) then
 		for vendor,vData in pairs(LootCount_DropCount_DB.Vendor) do
 			local testdata=vData; testdata=testdata:lower();
-			if (testdata:find(find)) then
+			if (testdata:find(find,1,true)) then
 				local X,Y,Zone,Faction,Repair=DropCount.DB.Vendor:ReadBaseData(vendor);
 				if (Faction==CONST.MYFACTION or Faction=="Neutral") then
-					if (not started) then
-						entry=LCDC_ResultListScroll:DMAdd("Vendors",nil,-1);
-						entry.Tooltip=nil;
-						wipe(entry.DB);
-						started=true;
-					end
-					entry=LCDC_ResultListScroll:DMAdd(Zone..": "..vendor,nil,0);
-					wipe(entry.DB);
-					if (not entry.Tooltip) then entry.Tooltip={}; end
-					entry.Tooltip[1]=Faction.." vendor: "..vendor;
-					entry.Tooltip[2]=Zone..string.format(" (%.0f,%.0f)",X,Y);
-					if (Repair) then entry.Tooltip[3]="Can repair your stuff"; end
-					entry.DB.Section="Vendor";
-					entry.DB.Entry=vendor;
-					entry.DB.Data=vData;
+					local tt={Faction.." vendor: "..vendor,Zone..string.format(" (%.0f,%.0f)",X,Y)};
+					if (Repair) then table.insert(tt,"Can repair your stuff"); end
+					self:Found(	"Vendor",
+								Zone..": "..vendor,
+								tt,
+								{Section="Vendor",Entry=vendor,Data=vData});
 				end
 			end
 		end
 	end
 
 	-- Search quests
-	if (LCDC_VendorSearch_UseQuests:GetChecked()) then
+	if (uQue) then
 		started=nil;
 		for npc,nData in pairs(LootCount_DropCount_DB.Quest[CONST.MYFACTION]) do
 			local testdata=nData; testdata=testdata:lower();
-			if (testdata:find(find)) then
-				if (not started) then
-					entry=LCDC_ResultListScroll:DMAdd("Quests",nil,-1);
-					entry.Tooltip=nil;
-					wipe(entry.DB);
-					started=true;
-				end
+			if (testdata:find(find,1,true)) then
 				local npcData=DropCount.DB.Quest:Read(CONST.MYFACTION,npc);
-				entry=LCDC_ResultListScroll:DMAdd(npcData.Zone..": "..npc,nil,0);
-				wipe(entry.DB);
-				if (not entry.Tooltip) then entry.Tooltip={}; end
-				entry.Tooltip[1]="Quest-giver: "..npc;
-				entry.Tooltip[2]=npcData.Zone..string.format(" (%.0f,%.0f)",npcData.X,npcData.Y);
-				entry.DB.Section="Quest";
-				entry.DB.Entry=npc;
-				entry.DB.Data=nData;
+				self:Found(	"Quest",
+							npcData.Zone..": "..npc,
+							{"Quest-giver: "..npc,npcData.Zone..string.format(" (%.0f,%.0f)",npcData.X,npcData.Y)},
+							{Section="Quest",Entry=npc,Data=nData});
 			end
 		end
 	end
 
 	-- Search books
-	if (LCDC_VendorSearch_UseBooks:GetChecked()) then
+	if (uBoo) then
 		started=nil;
 		for book,bData in pairs(LootCount_DropCount_DB.Book) do
 			local include=nil;
 			local testdata=book; testdata=testdata:lower();
-			if (testdata:find(find)) then include=true;
+			if (testdata:find(find,1,true)) then include=true;
 			else
 				for _,iData in ipairs(bData) do
 					local testdata=iData.Zone; testdata=testdata:lower();
-					if (testdata:find(find)) then include=true; break; end
+					if (testdata:find(find,1,true)) then include=true; break; end
 				end
 			end
 			if (include) then
-				if (not started) then
-					entry=LCDC_ResultListScroll:DMAdd("Books",nil,-1);
-					entry.Tooltip=nil;
-					wipe(entry.DB);
-					started=true;
-				end
-				entry=LCDC_ResultListScroll:DMAdd(book,nil,0);
-				wipe(entry.DB);
-				if (not entry.Tooltip) then entry.Tooltip={}; end
-				entry.Tooltip[1]="Book: "..book;
+				local tt={"Book: "..book};
 				for index,iData in ipairs(bData) do
-					entry.Tooltip[index+1]=iData.Zone..string.format(" (%.0f,%.0f)",iData.X,iData.Y);
+					table.insert(tt,iData.Zone..string.format(" (%.0f,%.0f)",iData.X,iData.Y));
 				end
-				entry.DB.Section="Book";
-				entry.DB.Entry=book;
+				self:Found(	"Book",
+							book,
+							tt,
+							{Section="Book",Entry=npc});
 			end
 		end
 	end
 
 	-- Search items
-	if (LCDC_VendorSearch_UseItems:GetChecked()) then
+	if (uIte) then
 		started=nil;
 		for item,iData in pairs(LootCount_DropCount_DB.Item) do
 			local testdata=iData; testdata=testdata:lower();
-			if (testdata:find(find)) then
-				if (not started) then
-					entry=LCDC_ResultListScroll:DMAdd("Items",nil,-1);
-					entry.Tooltip=nil;
-					wipe(entry.DB);
-					started=true;
-				end
+			if (testdata:find(find,1,true)) then
 				DropCount.Cache:AddItem(item);
 				local itemData=DropCount.DB.Item:Read(item);
---				entry=LCDC_ResultListScroll:DMAdd(itemData.Item,nil,nil,0);
-				entry=LCDC_ResultListScroll:DMAdd(itemData.Item,nil,0,GetItemIcon(item));
-				wipe(entry.DB);
-				entry.DB.Section="Item";
-				entry.DB.Entry=item;
-				entry.DB.Data=itemData;
+				self:Found(	"Item",
+							itemData.Item,
+							nil,
+							{Section="Item",Entry=item,Data=itemData},
+							GetItemIcon(item));
 			end
 		end
 	end
 
 	-- Search mobs
-	if (LCDC_VendorSearch_UseMobs:GetChecked()) then
+	if (uMob) then
 		started=nil;
-		for mob,mData in pairs(LootCount_DropCount_DB.Count) do
-			local testdata=mob; testdata=testdata:lower();
-			if (testdata:find(find)) then
-				if (not started) then
-					entry=LCDC_ResultListScroll:DMAdd("Creatures",nil,-1);
-					entry.Tooltip=nil;
-					wipe(entry.DB);
-					started=true;
-				end
-				entry=LCDC_ResultListScroll:DMAdd(mob,nil,0);
-				wipe(entry.DB);
-				entry.DB.Section="Creature";
-				entry.DB.Entry=mob;
+		for mob,data in pairs(LootCount_DropCount_DB.Count) do
+			local testmob=mob; testmob=testmob:lower();
+			local testdata=data; testdata=testdata:lower();
+			if (testmob:find(find,1,true) or testdata:find(find,1,true)) then
+				local t=DropCount.DB.Count:Read(mob);
+				if (t.Name) then testmob=t.Name; else testmob=mob; end	-- if converted, use name entry
+				self:Found(	"Creature",
+							testmob,
+							nil,
+							{Section="Creature",Entry=mob});
 			end
 		end
 	end
 
 	-- Search trainers
-	if (LCDC_VendorSearch_UseTrainers:GetChecked()) then
+	if (uTra) then
 		started=nil;
 		for npc,nData in pairs(LootCount_DropCount_DB.Trainer[CONST.MYFACTION]) do
 			local testdata=nData; testdata=testdata:lower();
-			if (testdata:find(find)) then
-				if (not started) then
-					entry=LCDC_ResultListScroll:DMAdd("Trainers",nil,-1);
-					entry.Tooltip=nil;
-					wipe(entry.DB);
-					started=true;
-				end
+			if (testdata:find(find,1,true)) then
 				local npcData=DropCount.DB.Trainer:Read(npc);
-				entry=LCDC_ResultListScroll:DMAdd(npcData.Zone..": "..npc,nil,0);
-				wipe(entry.DB);
-				if (not entry.Tooltip) then entry.Tooltip={}; end
-				entry.Tooltip[1]="Trainer "..npc..": "..npcData.Service;
-				entry.Tooltip[2]=npcData.Zone..string.format(" (%.0f,%.0f)",npcData.X,npcData.Y);
-				entry.DB.Section="Trainer";
-				entry.DB.Entry=npc;
-				entry.DB.Data=nData;
+				self:Found(	"Trainer",
+							npcData.Zone..": "..npc,
+							{"Trainer "..npc..": "..npcData.Service,npcData.Zone..string.format(" (%.0f,%.0f)",npcData.X,npcData.Y)},
+							{Section="Trainer",Entry=npc,Data=nData});
 			end
 		end
 	end
@@ -3153,8 +3515,6 @@ function DropCountXML.MenuLoad()
 
 	info.isTitle=1; info.checked=nil; info.func=nil; info.text="Global settings for "..LOOTCOUNT_DROPCOUNT_VERSIONTEXT..":"; UIDropDownMenu_AddButton(info,1); info.isTitle=nil; info.disabled=nil;
 
-	info.func=DropCount.Menu.ToggleZone;
-	info.text="Show zone"; info.checked=LootCount_DropCount_Character.ShowZone; UIDropDownMenu_AddButton(info,1);
 	info.func=DropCount.Menu.ToggleZoneMobs;
 	info.text="Only list mobs from current zone"; info.checked=LootCount_DropCount_Character.ShowZoneMobs; UIDropDownMenu_AddButton(info,1);
 	info.func=DropCount.LootCount.MenuSetGoal;
@@ -3171,11 +3531,6 @@ function DropCount.Menu.ToggleZoneMobs()
 	else LootCount_DropCount_Character.ShowZoneMobs=true; end
 end
 
-function DropCount.Menu.ToggleZone()
-	if (LootCount_DropCount_Character.ShowZone) then LootCount_DropCount_Character.ShowZone=false;
-	else LootCount_DropCount_Character.ShowZone=true; end
-end
-
 function DropCount.Menu.ToggleQuestItem(frame)
 	if (LootCount_DropCount_NoQuest[frame.value]) then LootCount_DropCount_NoQuest[frame.value]=nil; return; end
 	LootCount_DropCount_NoQuest[frame.value]=true;
@@ -3188,7 +3543,7 @@ function DropCount.Menu.ToggleChannel(frame)
 end
 
 function DropCount.LootCount.MenuSetGoal()
-	if (not DropCount.Registered) then return; end
+	if (not DropCount.LootCount.Registered) then return; end
 	local user=LootCountAPI.User(DropCount.ThisBuffer);
 	LootCount_SetGoalPopup(DropCount.ThisBuffer);
 end
@@ -3197,7 +3552,7 @@ function DropCount:CleanDB()
 	local text=CONST.C_BASIC.."DropCount:|r ";
 
 	if (DropCount.Debug) then
-		collectgarbage("collect");
+--		collectgarbage("collect");
 		UpdateAddOnMemoryUsage();
 		local usage=GetAddOnMemoryUsage("LootCount_DropCount");
 		usage=string.format("%.0fKB",usage);
@@ -3310,8 +3665,8 @@ function DropCount:SaveBook(BookName,bZone,bX,bY,Map)
 end
 
 function DropCount:SaveTrainer(name,service,zone,x,y,faction)
-print(name,service,zone,x,y,faction);
 	if (not faction) then faction=CONST.MYFACTION; end
+--print(name,service,zone,x,y,faction);
 	if (not LootCount_DropCount_DB.Trainer) then LootCount_DropCount_DB.Trainer={}; end
 	if (not LootCount_DropCount_DB.Trainer[faction]) then LootCount_DropCount_DB.Trainer[faction]={}; end
 	local base=LootCount_DropCount_DB.Trainer[faction];
@@ -3321,24 +3676,29 @@ end
 
 function DropCountXML:OnUpdate(frame,elapsednow)
 	if (not DropCount.Loaded) then return; end
-	MT:Next(elapsednow*1000);		-- Run multi-threading
+	MT.FastMT=elapsednow*0.99;				-- aim at slighly higher fps for fast switching
+	if (MT.FastMT>MT.Speed) then MT.FastMT=MT.Speed; end	-- limit to slowest MT
+	MT:Next();		-- Run multi-threading
 	DropCount.Loaded=DropCount.Loaded+elapsednow;
 	DropCount.Tracker.Elapsed=DropCount.Tracker.Elapsed+elapsednow;
-	if (not DropCount.Tracker.Exited) then return; end
+	if (not DropCount.Tracker.Exited) then return; end	-- block for real MT
 	DropCount.Tracker.Exited=nil;
 	local elapsed=DropCount.Tracker.Elapsed;
 	DropCount.Tracker.Elapsed=0;
 
-	if (DropCount.Loaded>10) then
-		DropCount.Update=DropCount.Update+elapsed;
-		if (DropCount.Update>=20) then
-			DropCount.Update=0;
-			if (DropCountXML.ARL and DropCountXML.ARL.Importing==false) then
---				DropCountXML.ARL:Import()
+	if (DropCount.Loaded>10) then					-- block for held processes
+		if (DropCount_Local_Code_Enabled) then		-- block only for me
+			DropCount.Update=DropCount.Update+elapsed;
+			if (DropCount.Update>=20) then
+				DropCount.Update=0;
+				if (DropCountXML.ARL and DropCountXML.ARL.Importing==false) then
+--					DropCountXML.ARL:Import()
+				end
 			end
 		end
 	end
 
+	-- add quest-ID
 	if (not CONST.QUESTID and (not DropCount.Tracker.UnknownItems or not DropCount.Tracker.UnknownItems["item:31812"])) then
 		_,_,_,_,_,CONST.QUESTID=GetItemInfo("item:31812");
 		if (not CONST.QUESTID) then
@@ -3348,18 +3708,25 @@ function DropCountXML:OnUpdate(frame,elapsednow)
 		end
 	end
 
-	DropCount.OnUpdate:RunUnknownItems(elapsed);
-	DropCount.OnUpdate:PollVendor(elapsed);
-	DropCount.OnUpdate:RunMouseoverInWorld(elapsed);
-	DropCount.OnUpdate:RunTimedQueue(elapsed);
-	DropCount.OnUpdate:MonitorGameTooltip(elapsed);
-	DropCount.OnUpdate:MonitorReadableTexts(elapsed);
-	DropCount.OnUpdate:RunMobList();
-	DropCount.OnUpdate:RunStartup(elapsed);
-	DropCount.OnUpdate:RunQuestScan(elapsed);
-	DropCount.OnUpdate:WalkOldQuests(elapsed);
---	DropCount.OnUpdate:RunConvertAndMerge(elapsed);
---	DropCount.OnUpdate:RunClearMobListMT(elapsed);
+	-- delayed merchant read
+	if (DropCount.Timer.VendorDelay>=0) then
+		DropCount.Timer.VendorDelay=DropCount.Timer.VendorDelay-elapsed;
+		if (DropCount.Timer.VendorDelay<0) then
+			if (not DropCount:ReadMerchant(DropCount.Target.OpenMerchant)) then
+				DropCount.Timer.VendorDelay=.5;
+			end
+		end
+	end
+
+	DropCount.OnUpdate:RunMouseoverInWorld();
+	DropCount.OnUpdate:MonitorReadableTexts();
+	if (DropCount.Tracker.UnknownItems) then DropCount.OnUpdate:RunUnknownItems(elapsed); end
+	if (DropCount.Tracker.QueueSize>0) then DropCount.OnUpdate:RunTimedQueue(); end
+	if (GameTooltip and GameTooltip:IsVisible()) then DropCount.OnUpdate:MonitorGameTooltip(); end
+	if (DropCount.Tracker.MobList.button) then DropCount.OnUpdate:RunMobList(); end
+	if (DropCount.Timer.StartupDelay) then DropCount.OnUpdate:RunStartup(elapsed); end
+	if (LCDC_RescanQuests) then DropCount.OnUpdate:RunQuestScan(elapsed); end
+	if (LootCount_DropCount_DB.QuestQuery) then DropCount.OnUpdate:WalkOldQuests(elapsed); end
 
 	if (DropCount.SpoolQuests) then DropCount:WalkQuests(); end
 
@@ -3369,40 +3736,48 @@ function DropCountXML:OnUpdate(frame,elapsednow)
 			local isEnabled = GetTrainerServiceTypeFilter("used")
 			if (not isEnabled) then SetTrainerServiceTypeFilter("used",1); end
 			local trainerService=GetTrainerServiceSkillLine(1);
-print("Trainer: "..trainerService);
+--print("Trainer: "..trainerService);
 			if (not isEnabled) then SetTrainerServiceTypeFilter("used",0); end
-			DropCount:SaveTrainer(DropCount.Target.CurrentAliveFriendClose,trainerService,DropCount:GetFullZone(),DropCount:GetPlayerPosition());
+			if (IsTradeskillTrainer()) then		-- this filters out riding trainers
+				DropCount:SaveTrainer(DropCount.Target.CurrentAliveFriendClose,trainerService,DropCount:GetFullZone(),DropCount:GetPlayerPosition());
+			end
 		end
 	else
 		self.CTF=nil;
 	end
 
-	if (DropCount.Registered) then
---> Old fight-code removed
-	elseif (LootCountAPI and LootCountAPI.Register and LootCount_Loaded) then
-		-- Old LootCount dependency load-code
-		local info = {	Name=LOOTCOUNT_DROPCOUNT,
-						MenuText="LootCount Drop-rate",
-						Update=DropCount.LootCount.UpdateButton,
-						Drop=DropCount.LootCount.DropItem,
-						Clicker=DropCount.LootCount.IconClicked,
-						Texture="Interface\\Icons\\INV_Misc_QuestionMark",
-						Tooltip=DropCount.LootCount.Tooltip,
-						ColorBottom={ r=1, g=1, b=0 },
-						ColorTop={ r=.7, g=.7, b=0 },
-					};
+	if (not DropCount.LootCount.Registered) then
+		if (LootCountAPI and LootCountAPI.Register and LootCount_Loaded) then
+			-- Old LootCount dependency load-code
+			local info = {	Name=LOOTCOUNT_DROPCOUNT,
+							MenuText="LootCount Drop-rate",
+							Update=DropCount.LootCount.UpdateButton,
+							Drop=DropCount.LootCount.DropItem,
+							Clicker=DropCount.LootCount.IconClicked,
+							Texture="Interface\\Icons\\INV_Misc_QuestionMark",
+							Tooltip=DropCount.LootCount.Tooltip,
+							ColorBottom={ r=1, g=1, b=0 },
+							ColorTop={ r=.7, g=.7, b=0 },
+						};
 
-		LootCount_DropCount_DB.RAID=nil;
-		if (IsInGuild()) then LootCount_DropCount_DB.GUILD=true; else LootCount_DropCount_DB.GUILD=nil; end
-		LootCountAPI.Register(info);
-		DropCount.Registered=true;
-		DropCount:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_GREEN.."LootCount detected. DropCount is available from the LootCount menu.");
+			LootCount_DropCount_DB.RAID=nil;
+			if (IsInGuild()) then LootCount_DropCount_DB.GUILD=true; else LootCount_DropCount_DB.GUILD=nil; end
+			LootCountAPI.Register(info);
+			DropCount.LootCount.Registered=true;
+			DropCount:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_GREEN.."LootCount detected. DropCount is available from the LootCount menu.");
+		end
+	end
+	if (not DropCount.Crawler.Registered) then
+		if (CrawlerXML and CrawlerXML.SetPlugin) then
+			CrawlerXML:SetPlugin("DropCount",DropCount.Crawler);
+			DropCount.Crawler.Registered=true;
+			DropCount:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_GREEN.."Crawler detected. DropCount is available as a Crawler plug-in.");
+		end
 	end
 	DropCount.Tracker.Exited=true;
 end
 
 function DropCount.OnUpdate:RunMobList()
-	if (not DropCount.Tracker.MobList.button) then return; end
 	DropCount.Tooltip:MobList(	DropCount.Tracker.MobList.button,
 								DropCount.Tracker.MobList.plugin,
 								DropCount.Tracker.MobList.limit,
@@ -3411,93 +3786,79 @@ end
 
 -- Keep un-MT'd
 function DropCount.OnUpdate:RunUnknownItems(elapsed)
-	if (DropCount.Tracker.UnknownItems) then
-		DropCount.Cache.Timer=DropCount.Cache.Timer-elapsed;
-		if (DropCount.Cache.Timer<=0) then
-			DropCount.Cache.Timer=CONST.CACHESPEED;
-			if (not DropCount.Tracker.RequestedItem) then
-				local counter=0;
-				for unknown,value in pairs(DropCount.Tracker.UnknownItems) do
-					if (not DropCount.Tracker.RequestedItem) then
-						DropCount.Tracker.RequestedItem=unknown;
-					end
-					DropCount.Cache:Execute(unknown,true);	-- Blind (pre) update
-					counter=counter+1;
-					if (counter>=5) then break; end
+	DropCount.Cache.Timer=DropCount.Cache.Timer-elapsed;
+	if (DropCount.Cache.Timer<=0) then
+		DropCount.Cache.Timer=CONST.CACHESPEED;
+		if (not DropCount.Tracker.RequestedItem) then
+			local counter=0;
+			for unknown,value in pairs(DropCount.Tracker.UnknownItems) do
+				if (not DropCount.Tracker.RequestedItem) then
+					DropCount.Tracker.RequestedItem=unknown;
 				end
-				if (not DropCount.Tracker.RequestedItem) then DropCount.Tracker.UnknownItems=nil; return; end
+				DropCount.Cache:Execute(unknown,true);	-- Blind (pre) update
+				counter=counter+1;
+				if (counter>=5) then break; end
 			end
-			local itemname=GetItemInfo(DropCount.Tracker.RequestedItem);
-			if (not itemname) then
-				DropCount.Cache:Execute(DropCount.Tracker.RequestedItem);
-			else
-				DropCount.Tracker.UnknownItems[DropCount.Tracker.RequestedItem]=nil;
-				if (DropCount.Search.Item==DropCount.Tracker.RequestedItem) then
-					DropCount:VendorsForItem();
-				elseif (DropCount.Search.mobItem==DropCount.Tracker.RequestedItem) then
-					DropCount:AreaForItem();
-				end
-				DropCount.Tracker.RequestedItem=nil;
-				DropCount.Cache.Retries=0;
-				if (not LootCount_DropCount_DB.Converted) then
-					-- Counting items
-					local val,vTable,i;
-					i=0;
-					for val,vTable in pairs(DropCount.Tracker.UnknownItems) do i=i+1; end
-					if (i<6 or (i>5 and (floor(i/25)*25)==i)) then
-						DropCount:Chat("Converting DropCount database: "..i.." items left...",0,1,1);
-					end
-				end
-			end
+			if (not DropCount.Tracker.RequestedItem) then DropCount.Tracker.UnknownItems=nil; return; end
 		end
-		if (DropCount.Cache.Retries>=CONST.CACHEMAXRETRIES) then
+		local itemname=GetItemInfo(DropCount.Tracker.RequestedItem);
+		if (not itemname) then
+			DropCount.Cache:Execute(DropCount.Tracker.RequestedItem);
+		else
+			DropCount.Tracker.UnknownItems[DropCount.Tracker.RequestedItem]=nil;
 			if (DropCount.Search.Item==DropCount.Tracker.RequestedItem) then
-				DropCount:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_RED.."Could not retrieve information for this item from the server.");
-				DropCount.Search.Item=nil;
+				DropCount:VendorsForItem();
 			elseif (DropCount.Search.mobItem==DropCount.Tracker.RequestedItem) then
-				DropCount:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_RED.."Could not retrieve information for this item from the server.");
-				DropCount.Search.mobItem=nil;
+				DropCount:AreaForItem();
 			end
-			DropCount:Chat("Not retrievable: "..DropCount.Tracker.RequestedItem,1);
-			if (LootCount_DropCount_DB.Item and
-					LootCount_DropCount_DB.Item[DropCount.Tracker.RequestedItem]) then
-				local iTable=DropCount.DB.Item:Read(DropCount.Tracker.RequestedItem);
-				if (iTable.Item) then
-					DropCount:Chat("\""..DropCount.Tracker.RequestedItem.."\" seem to be \""..iTable.Item.."\"",1);
+			DropCount.Tracker.RequestedItem=nil;
+			DropCount.Cache.Retries=0;
+			if (not LootCount_DropCount_DB.Converted) then
+				-- Counting items
+				local val,vTable,i;
+				i=0;
+				for val,vTable in pairs(DropCount.Tracker.UnknownItems) do i=i+1; end
+				if (i<6 or (i>5 and (floor(i/25)*25)==i)) then
+					DropCount:Chat("Converting DropCount database: "..i.." items left...",0,1,1);
 				end
 			end
-			DropCount:Chat("This can happen if it has not been seen on the server since last server restart.",1);
-			DropCount.Tracker.UnknownItems=nil;			-- Too many tries, so abort
-			DropCount.Tracker.RequestedItem=nil;
 		end
-	elseif (DropCount.Cache.CachedConvertItems>0) then
---		DropCount.Convert:One();
 	end
-end
-
-function DropCount.OnUpdate:PollVendor(elapsed)
-	if (DropCount.Timer.VendorDelay>=0) then
-		DropCount.Timer.VendorDelay=DropCount.Timer.VendorDelay-elapsed;
-		if (DropCount.Timer.VendorDelay<0) then
-			if (not DropCount:ReadMerchant(DropCount.Target.OpenMerchant)) then
-				DropCount.Timer.VendorDelay=.5;
+	if (DropCount.Cache.Retries>=CONST.CACHEMAXRETRIES) then
+		if (DropCount.Search.Item==DropCount.Tracker.RequestedItem) then
+			DropCount:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_RED.."Could not retrieve information for this item from the server.");
+			DropCount.Search.Item=nil;
+		elseif (DropCount.Search.mobItem==DropCount.Tracker.RequestedItem) then
+			DropCount:Chat(CONST.C_BASIC.."DropCount:|r "..CONST.C_RED.."Could not retrieve information for this item from the server.");
+			DropCount.Search.mobItem=nil;
+		end
+		DropCount:Chat("Not retrievable: "..DropCount.Tracker.RequestedItem,1);
+		if (LootCount_DropCount_DB.Item and
+				LootCount_DropCount_DB.Item[DropCount.Tracker.RequestedItem]) then
+			local iTable=DropCount.DB.Item:Read(DropCount.Tracker.RequestedItem);
+			if (iTable.Item) then
+				DropCount:Chat("\""..DropCount.Tracker.RequestedItem.."\" seem to be \""..iTable.Item.."\"",1);
 			end
 		end
+		DropCount:Chat("This can happen if it has not been seen on the server since last server restart.",1);
+		DropCount.Tracker.UnknownItems=nil;			-- Too many tries, so abort
+		DropCount.Tracker.RequestedItem=nil;
 	end
 end
 
-function DropCount.OnUpdate:RunMouseoverInWorld(elapsed)
+function DropCount.OnUpdate:RunMouseoverInWorld()
 	if (UnitExists("mouseover")) then
 		local modifier=IsAltKeyDown();
 		local unit=UnitName("mouseover");
+		local sguid=UnitGUID("mouseover"):sub(7,10);	-- MoP
 		if (LootCount_DropCount_DB.Count[unit] and LootCount_DropCount_Character.InvertMobTooltip) then
 			modifier=(not modifier);
 		end
 		if (modifier) then
-			if (not LootCount_DropCount_TT:IsVisible()) then DropCount:SetLootlist(UnitName("mouseover"));
+			if (not LootCount_DropCount_TT:IsVisible()) then DropCount:SetLootlist(unit,sguid,LootCount_DropCount_Character.CompactView);
 			elseif (LootCount_DropCount_TT.Loading) then
 				LootCount_DropCount_TT:Hide();
-				DropCount:SetLootlist(UnitName("mouseover"));
+				DropCount:SetLootlist(unit,sguid,LootCount_DropCount_Character.CompactView);
 			end
 			return;
 		end
@@ -3507,14 +3868,12 @@ function DropCount.OnUpdate:RunMouseoverInWorld(elapsed)
 	end
 end
 
-function DropCount.OnUpdate:RunTimedQueue(elapsed)
-	if (DropCount.Tracker.QueueSize>0) then
-		local now=time();
-		if (DropCount.Tracker.QueueSize>0 and now-DropCount.Tracker.TimedQueue[DropCount.Tracker.QueueSize].Time>CONST.QUEUETIME) then
-			DropCount.Tracker.TimedQueue[DropCount.Tracker.QueueSize]=nil;
-			DropCount.Tracker.QueueSize=DropCount.Tracker.QueueSize-1;
-			if (DropCount.Registered) then LootCountAPI.Force(LOOTCOUNT_DROPCOUNT); end
-		end
+function DropCount.OnUpdate:RunTimedQueue()
+	local now=time();
+	if (now-DropCount.Tracker.TimedQueue[DropCount.Tracker.QueueSize].Time>CONST.QUEUETIME) then
+		DropCount.Tracker.TimedQueue[DropCount.Tracker.QueueSize]=nil;
+		DropCount.Tracker.QueueSize=DropCount.Tracker.QueueSize-1;
+		if (DropCount.LootCount.Registered) then LootCountAPI.Force(LOOTCOUNT_DROPCOUNT); end
 	end
 end
 
@@ -3534,39 +3893,34 @@ function DropCount:BuildItemList(mob)
 	return list;
 end
 
-function DropCount.OnUpdate:MonitorGameTooltip(elapsed)
-	if (GameTooltip and GameTooltip:IsVisible()) then
-		if (IsControlKeyDown() or IsAltKeyDown()) then
-			local _,ThisItem=GameTooltip:GetItem();
-			if (ThisItem) then
-				ThisItem=DropCount:GetID(ThisItem);
-				if (ThisItem) then
-					if (IsControlKeyDown()) then DropCount.Tooltip:VendorList(ThisItem);
-					elseif (IsAltKeyDown()) then DropCount.Tooltip:MobList(ThisItem);
-					else
-					end
-				end
-			end
+function DropCount.OnUpdate:MonitorGameTooltip()
+	if (not GameTooltip or not GameTooltip:IsVisible()) then return; end
+	if (not IsControlKeyDown() and not IsAltKeyDown()) then return; end
+	local _,ThisItem=GameTooltip:GetItem();
+	if (not ThisItem) then return; end
+	ThisItem=DropCount:GetID(ThisItem);
+	if (ThisItem) then
+		if (IsControlKeyDown()) then DropCount.Tooltip:VendorList(ThisItem);
+		elseif (IsAltKeyDown()) then DropCount.Tooltip:MobList(ThisItem);
 		end
 	end
 end
 
-function DropCount.OnUpdate:MonitorReadableTexts(elapsed)
+function DropCount.OnUpdate:MonitorReadableTexts()
 	if (ItemTextFrame and ItemTextFrame:IsVisible()) then
-		if (not DropCount.ItemTextFrameHandled) then
-			if (ItemTextGetCreator()) then							-- A player created text
-				DropCount.ItemTextFrameHandled=true;						-- Do nothing more
-			elseif (ItemTextTitleText) then							-- There's a header
-				local material=ItemTextGetMaterial();
-				if (not material) then material="Parchment"; end
-				if (material=="Parchment") then						-- It's partchment
-					if (ItemTextNextPageButton:IsVisible()) then	-- Multi-page
-						local theItem=ItemTextTitleText:GetText();
-						if (theItem) then							-- There's something in the header
-							if (not GetItemInfo(theItem)) then		-- It's not an item name
-								DropCount:SaveBook(theItem);
-								DropCount.ItemTextFrameHandled=true;		-- Do nothing more
-							end
+		if (DropCount.ItemTextFrameHandled) then return; end
+		if (ItemTextGetCreator()) then							-- A player created text
+			DropCount.ItemTextFrameHandled=true;
+		elseif (ItemTextTitleText) then							-- There's a header
+			local material=ItemTextGetMaterial();
+			if (not material) then material="Parchment"; end
+			if (material=="Parchment") then						-- It's parchment
+				if (ItemTextNextPageButton:IsVisible()) then	-- Multi-page
+					local theItem=ItemTextTitleText:GetText();
+					if (theItem) then							-- There's something in the header
+						if (not GetItemInfo(theItem)) then		-- It's not an item name
+							DropCount:SaveBook(theItem);			-- it's by high probability a book
+							DropCount.ItemTextFrameHandled=true;
 						end
 					end
 				end
@@ -3578,30 +3932,24 @@ function DropCount.OnUpdate:MonitorReadableTexts(elapsed)
 end
 
 function DropCount.OnUpdate:RunStartup(elapsed)
-	if (DropCount.Timer.StartupDelay and DropCount.Timer.StartupDelay>0) then
-		DropCount.Timer.StartupDelay=DropCount.Timer.StartupDelay-elapsed;
-		if (DropCount.Timer.StartupDelay<=0) then
-			DropCount.Timer.StartupDelay=nil;
-			Astrolabe:CalculateMinimapIconPositions();
---			DropCount:CleanDB();
-			LCDC_RescanQuests=CONST.RESCANQUESTS;
-		end
+	DropCount.Timer.StartupDelay=DropCount.Timer.StartupDelay-elapsed;
+	if (DropCount.Timer.StartupDelay<=0) then
+		DropCount.Timer.StartupDelay=nil;
+		Astrolabe:CalculateMinimapIconPositions();
+		LCDC_RescanQuests=CONST.RESCANQUESTS;
 	end
 end
 
 function DropCount.OnUpdate:RunQuestScan(elapsed)
-	if (LCDC_RescanQuests) then
-		LCDC_RescanQuests=LCDC_RescanQuests-elapsed;
-		if (LCDC_RescanQuests<0) then
-			LCDC_RescanQuests=nil;
-			DropCount.Quest:Scan();
-			MT:Run("MM Plot",DropCount.MT.Icons.PlotMinimap);
-		end
+	LCDC_RescanQuests=LCDC_RescanQuests-elapsed;
+	if (LCDC_RescanQuests<0) then
+		LCDC_RescanQuests=nil;
+		DropCount.Quest:Scan();
+		MT:Run("MM Plot",DropCount.MT.Icons.PlotMinimap);
 	end
 end
 
 function DropCount.OnUpdate:WalkOldQuests(elapsed)
-	if (not LootCount_DropCount_DB.QuestQuery) then return; end
 	if (DropCount.Timer.PrevQuests>=0) then
 		DropCount.Timer.PrevQuests=DropCount.Timer.PrevQuests-elapsed;
 		return;
@@ -3611,6 +3959,7 @@ function DropCount.OnUpdate:WalkOldQuests(elapsed)
 		for qIndex,_ in pairs(LootCount_DropCount_DB.QuestQuery) do
 			count=true;
 			local qName=DropCount:GetQuestName("quest:"..qIndex);
+--print("qName",qName);
 			if (qName) then
 				if (LootCount_DropCount_Character.DoneQuest[qName]) then
 					if (type(LootCount_DropCount_Character.DoneQuest[qName])~="table") then
@@ -3653,99 +4002,256 @@ function DropCount.OnUpdate:WalkOldQuests(elapsed)
 end
 
 function DropCount.MT.DB:CleanImport()
-	if (not LootCount_DropCount_MergeData.Count) then
-		DropCount.Tracker.CleanImport.Cleaned=true;
-		return;
+	local sects=0;
+	for _,md in ipairs(LootCount_DropCount_MergeData) do
+		sects=sects+1;
 	end
-	-- DropCount.Tracker.CleanImport.LastMob inits to nil
-	for checkMob,mRaw in pairs(LootCount_DropCount_MergeData.Count) do
-		-- Check for WoW 4.2 combatmessage f-up
-		if (checkMob:find("0x",1,true)==1) then
-			DropCount:RemoveFromItem("Name",checkMob,LootCount_DropCount_MergeData)
-			DropCount:RemoveFromItem("Skinning",checkMob,LootCount_DropCount_MergeData)
-			LootCount_DropCount_MergeData.Count[checkMob]=nil;
-			DropCount.Tracker.CleanImport.Deleted=DropCount.Tracker.CleanImport.Deleted+1;
+	if (DropCount.Debug) then
+		DropCount:Chat("Cleaning import data: "..sects.." sections.",.8,.8,1);
+	end
+	for s,md in ipairs(LootCount_DropCount_MergeData) do
+		if (DropCount.Debug) then DropCount:Chat("Cleaning section "..s,.8,.8,1); end
+		if (not md.Count) then
+			DropCount.Tracker.CleanImport.Cleaned=true;
+			return;
+		end
+
+		DropCount.MT.DB.Maintenance:_0x(md,true);		-- Check for WoW 4.2 combatmessage f-up
+		DropCount.MT.DB.Maintenance:_KillHotwiredLoot(md,true);	-- Check for Pandaria hotwired addons
+		DropCount.MT.DB.Maintenance:_Skinning(md,true);
+		DropCount.MT.DB.Maintenance:_Kill(md,true);
+
+		DropCount.Tracker.CleanImport.Okay=DropCount.Tracker.CleanImport.Okay+1;
+
+		if (not checkMob) then
 			if (DropCount.Debug) then
-				DropCount:Chat("("..DropCount.Tracker.CleanImport.Deleted.."/"..DropCount.Tracker.CleanImport.Deleted+DropCount.Tracker.CleanImport.Okay..") "..checkMob.." has been deleted from import data.",.8,.8,1);
+				DropCount:Chat("Cleaning import data done",.8,.8,1);
+				DropCount:Chat("Deleted: "..DropCount.Tracker.CleanImport.Deleted,.8,.8,1);
+				DropCount:Chat("Okay: "..DropCount.Tracker.CleanImport.Okay,.8,.8,1);
 			end
+			DropCount.Tracker.CleanImport.Cleaned=true;
+--			collectgarbage("collect");
 		end
-		MT:Yield();
-
-		-- Check for skinned items
-		if (DropCount.DB:PreCheck(mRaw,"Skinning")) then
-			local nTable=DropCount.DB.Count:Read(checkMob,LootCount_DropCount_MergeData.Count);
-			if (nTable and nTable.Skinning and nTable.Skinning>0) then
-				local foundone=nil;
-				for iName,iRaw in pairs(LootCount_DropCount_MergeData.Item) do
-					if (DropCount.DB:PreCheck(iRaw,checkMob)) then
-						local iTable=DropCount.DB.Item:Read(iName,LootCount_DropCount_MergeData.Item);
-						if (iTable and iTable.Skinning and iTable.Skinning[checkMob]) then
-							DropCount.Tracker.CleanImport.Okay=DropCount.Tracker.CleanImport.Okay+1;
-							DropCount.Tracker.CleanImport.LastMob=checkMob;
-							foundone=true;
-						end
-					end
-					MT:Yield();
-				end
-				if (not foundone) then
-					DropCount:RemoveFromItem("Name",checkMob,LootCount_DropCount_MergeData)
-					DropCount:RemoveFromItem("Skinning",checkMob,LootCount_DropCount_MergeData)
-					LootCount_DropCount_MergeData.Count[checkMob]=nil;
-					DropCount.Tracker.CleanImport.Deleted=DropCount.Tracker.CleanImport.Deleted+1;
-					if (DropCount.Debug) then
-						DropCount:Chat("("..DropCount.Tracker.CleanImport.Deleted.."/"..DropCount.Tracker.CleanImport.Deleted+DropCount.Tracker.CleanImport.Okay..") "..checkMob.." has been deleted from import data.",.8,.8,1);
-					end
-				end
-			end
-		end
-		MT:Yield();
-
-		-- Check for no-loot items
-		if (DropCount.DB:PreCheck(mRaw,"Kill")) then
-			local nTable=DropCount.DB.Count:Read(checkMob,LootCount_DropCount_MergeData.Count);
-			if (nTable and nTable.Kill and nTable.Kill>2) then
-				local foundone=nil;
-				for iName,iRaw in pairs(LootCount_DropCount_MergeData.Item) do
-					if (DropCount.DB:PreCheck(iRaw,checkMob)) then
-						local iTable=DropCount.DB.Item:Read(iName,LootCount_DropCount_MergeData.Item);
-						if (iTable.Name and iTable.Name[checkMob]) then
-							if (iTable.Name[checkMob]>0) then	-- Not quest-tem
-								DropCount.Tracker.CleanImport.Okay=DropCount.Tracker.CleanImport.Okay+1;
-								DropCount.Tracker.CleanImport.LastMob=checkMob;
-								foundone=true;
-							end
-						end
-					end
-					MT:Yield();
-				end
-				if (not foundone) then
-					DropCount:RemoveFromItem("Name",checkMob,LootCount_DropCount_MergeData)
-					DropCount:RemoveFromItem("Skinning",checkMob,LootCount_DropCount_MergeData)
-					LootCount_DropCount_MergeData.Count[checkMob]=nil;
-					DropCount.Tracker.CleanImport.Deleted=DropCount.Tracker.CleanImport.Deleted+1;
-					if (DropCount.Debug) then
-						DropCount:Chat("("..DropCount.Tracker.CleanImport.Deleted.."/"..DropCount.Tracker.CleanImport.Deleted+DropCount.Tracker.CleanImport.Okay..") "..checkMob.." has been deleted from import data.",.8,.8,1);
-					end
-				end
-			end
-		end
-		MT:Yield();
-	end
-	DropCount.Tracker.CleanImport.Okay=DropCount.Tracker.CleanImport.Okay+1;
-	DropCount.Tracker.CleanImport.LastMob=checkMob;
-
-	if (not checkMob) then
-		if (DropCount.Debug) then
-			DropCount:Chat("Cleaning import data done",.8,.8,1);
-			DropCount:Chat("Deleted: "..DropCount.Tracker.CleanImport.Deleted,.8,.8,1);
-			DropCount:Chat("Okay: "..DropCount.Tracker.CleanImport.Okay,.8,.8,1);
-		end
-		DropCount.Tracker.CleanImport.Cleaned=true;
-		collectgarbage("collect");
 	end
 end
 
+-- Check for WoW 4.2 combatmessage f-up
+function DropCount.MT.DB.Maintenance:_0x(t,y)
+--print("_0x start");
+	if (not t or not t.Count) then return; end
+	for m in pairs(t.Count) do
+		if (m:find("0x",1,true)==1) then
+			DropCount:RemoveFromItems("Name",m,t) MT:Yield(y);
+			DropCount:RemoveFromItems("Skinning",m,t)
+			t.Count[m]=nil;
+			DropCount.Tracker.CleanImport.Deleted=DropCount.Tracker.CleanImport.Deleted+1;
+			if (DropCount.Debug) then DropCount:Chat("("..DropCount.Tracker.CleanImport.Deleted.."/"..DropCount.Tracker.CleanImport.Deleted+DropCount.Tracker.CleanImport.Okay..") "..m.." has been deleted.",.8,.8,1); end
+		end
+		MT:Yield();			-- "slow"
+	end
+	Table:PurgeCache(DM_WHO);
+--print("_0x end");
+end
+
+-- Check that mobs have registered drops for their loot type
+function DropCount.MT.DB.Maintenance:_Skinning(t,y) return self:_Drop(t,"Skinning",y); end
+function DropCount.MT.DB.Maintenance:_Kill(t,y) return self:_Drop(t,"Kill",y); end
+-- Check drop sections for validity
+function DropCount.MT.DB.Maintenance:_Drop(t,s,y)
+--print("_Drop start");
+	local si=s;
+	if (si=="Kill") then si="Name"; end	-- items do "Name"
+	if (s=="Name") then s="Kill"; end	-- mobs do "Kill"
+	for m,md in pairs(t.Count) do
+		if (md:find(s,1,true)) then	-- possibly had this drop type
+			local mt=DropCount.DB.Count:Read(m,t.Count);
+			if (mt and mt[s] and mt[s]>2) then	-- got it
+				local foundone=nil;
+				for i,id in pairs(t.Item) do		-- cycle items
+					if (id:find(m,1,true)) then		-- possible mob precense
+						local it=DropCount.DB.Item:Read(i,t.Item);
+						if (it and it[si] and it[si][m] and it[si][m]>0) then	-- dropped by said mob and not quest item
+							foundone=true; break;	-- drop exists
+						end
+					end
+					MT:Yield();		-- must be slow to ever finish
+				end
+				if (not foundone) then		-- no skinning drop for skinned mob
+					DropCount:RemoveFromItems("Name",m,t,true); MT:Yield(y);
+					DropCount:RemoveFromItems("Skinning",m,t,true);
+					LootCount_DropCount_DB.Count[m]=nil;
+					if (DropCount.Debug) then DropCount:Chat(s.."-drop missing: "..(mt.Name or m).." deleted.",.8,.8,1); end
+					Table:PurgeCache(DM_WHO);
+				else
+					MT:Yield(y);
+				end
+			end
+		else
+			MT:Yield(y);
+		end
+	end
+	Table:PurgeCache(DM_WHO);
+--print("_Drop end");
+end
+
+-- Check for Pandaria hotwired addons
+function DropCount.MT.DB.Maintenance:_KillHotwiredLoot(t,y)
+--print("_KillHotwiredLoot start");
+	local first=time({year=2012,month=8,day=28});
+	for i in pairs(t.Item) do
+		local buf=DropCount.DB.Item:Read(i,t.Item);
+		if (buf and buf.Time and buf.Time>first and buf.Time<time()) then
+			if (LootCount_DropCount_DB.LocalImporter) then
+				print("==>> Importer found:",buf.Item or i,date("%c",buf.Time));
+			end
+			if (t~=LootCount_DropCount_DB or not LootCount_DropCount_DB.LocalImporter) then
+				if (buf.Name) then
+					for m in pairs(buf.Name) do
+						DropCount:RemoveFromItems("Name",m,t,true); MT:Yield(true);
+						LootCount_DropCount_DB.Count[m]=nil;
+						MT:Yield(y);
+						Table:PurgeCache(DM_WHO);
+					end
+				end
+				if (buf.Skinning) then
+					for m in pairs(buf.Skinning) do
+						DropCount:RemoveFromItems("Skinning",m,t,true); MT:Yield(true);
+						LootCount_DropCount_DB.Count[m]=nil;
+						MT:Yield(y);
+						Table:PurgeCache(DM_WHO);
+					end
+				end
+				LootCount_DropCount_DB.Item[i]=nil;
+			else
+				MT:Yield();		-- "slow"
+			end
+		else
+			MT:Yield(y);
+		end
+	end
+--print("_KillHotwiredLoot end");
+end
+
+-- This can run for too long
+-- Hopefully fixed now by removing garbagecollect
+function DropCount.MT.DB:CleanDatabase()
+	if (DropCount.Debug) then DropCount:Chat("Running low-impact background database cleaner..."); end
+--print("starting");
+
+	-- Remove QG without quests or location 0,0
+	for faction,fTable in pairs(LootCount_DropCount_DB.Quest) do
+		for qg,qgd in pairs(fTable) do									-- All factions
+			local x,y=qg:match("^%- item %- %(.+ %- .+ (%d+)%,(%d+)%)$");
+			if (x and y and (x=="0" or y=="0")) then
+				fTable[qg]=nil;
+				Table:PurgeCache(DM_WHO);
+				if (DropCount.Debug) then
+					DropCount:Chat("Misplaced QG: "..faction..": "..qg.." deleted",.8,.8,1);
+				end
+--			elseif (not DropCount.DB.Quest:Read(faction,qg).Quests) then
+			elseif (not qgd:find("Quests",1,true) and not DropCount.DB.Quest:Read(faction,qg).Quests) then
+				fTable[qg]=nil;
+				Table:PurgeCache(DM_WHO);
+				if (DropCount.Debug) then
+					DropCount:Chat("Empty QG: "..faction..": "..qg.." deleted",.8,.8,1);
+				end
+			end
+			MT:Yield(true);		-- maintain low profile ("too long" has happened here)
+		end
+		Table:PurgeCache(DM_WHO);
+	end
+--print("Empty and misplaced QG done");
+	DropCount.WeHaveCleanDatabaseQG=true;
+
+	DropCount.MT.DB.Maintenance:_0x(LootCount_DropCount_DB,true);		-- Check for WoW 4.2 combatmessage f-up
+	DropCount.MT.DB.Maintenance:_Skinning(LootCount_DropCount_DB,true);
+	DropCount.MT.DB.Maintenance:_Kill(LootCount_DropCount_DB,true);
+
+	if (DropCount.Debug) then
+		DropCount:Chat("Cleaning database done.",.8,.8,1);
+	end
+end
+
+function DropCount.MT.DB:CleanDatabaseQG()
+--DropCount.Debug=true;
+	repeat MT:Yield(true); until (DropCount.WeHaveCleanDatabaseQG);		-- wait until QG DB cleaning is done
+	if (DropCount.Debug) then DropCount:Chat("Running QG cleaner..."); end
+
+--"- item - (Uldum 39,67)"
+--"- item - (Uldum - Obelisk of the Sun 42,57)"
+--"- item - (Stormwind City - Wizard's Sanctum 48,87)"
+
+	local scanA="^%- item %- %((.+) %- .+ %d+%,%d+%)$";				-- Set filter A
+	local scanB="^%- item %- %((.+) %d+%,%d+%)$";					-- Set filter B
+	local scanI="^%- item %- %(.+ %d+%,%d+%)$";						-- Set filter item
+	local buf={};
+
+	-- Remove duplicate same-zone item quest givers
+	for faction,fTable in pairs(LootCount_DropCount_DB.Quest) do
+		for qg,qgr in pairs(fTable) do									-- All factions
+			-- find zone for this npc or item
+			local zone=qg:match(scanA);									-- Get zone if any
+			if (not zone) then zone=qg:match(scanB); end
+			if (not zone) then											-- no zone, so npc
+				zone=DropCount.DB.Quest:Read(faction,qg).Zone;			-- get npc's zone
+				if (zone:find(" - ",1,true)) then
+					zone=zone:match("^(.+) %- .+$");					-- main zone only
+				end
+			end
+			-- spool all item qg for that zone
+			wipe(buf);
+			for _qg,_qgr in pairs(fTable) do							-- spool zone
+				if (_qg:find(zone,1,true)) then							-- zone in item QG name
+					table.insert(buf,_qg);
+				end
+				MT:Yield();		-- low fps for a fraction of a second as opposed to 10 minutes or lag
+			end
+--			if (DropCount.Debug) then DropCount:Chat("QGC: "..faction..", "..zone..", "..#buf.." items"); end
+			local qgd=DropCount.DB.Quest:Read(faction,qg);				-- get first item
+			-- cycle all same-zone item qg
+			for _bi,_qg in pairs(buf) do								-- spool zone
+				local _zone=_qg:match(scanA);							-- get zone if any
+				if (not _zone) then _zone=_qg:match(scanB); end
+				if (_zone and _zone==zone and qg~=_qg) then				-- same zone, different item
+					-- compare quests to find duplicates and remove them
+					for i,q in ipairs(qgd.Quests) do					-- cycle first quests
+						if (fTable[_qg]:find(tostring(q.ID)) and fTable[_qg]:find(q.Quest) and fTable[_qg]:find(q.Header)) then	-- All strings present
+							local _qgd=DropCount.DB.Quest:Read(faction,_qg);	-- Get tester item
+							for _i,_q in ipairs(_qgd.Quests) do			-- cycle tester quests
+								-- Has same quest?
+								if (_q.ID==q.ID and _q.Quest==q.Quest and _q.Header==q.Header) then
+									table.remove(_qgd.Quests,_i);
+									if (DropCount.Debug) then
+										DropCount:Chat("Duplicate "..faction.." QI: ".._qg,.8,.8,1);
+										DropCount:Chat("Deleted: "..q.Quest.." in "..q.Header,.8,.8,1);
+									end
+									-- only save if there are more quests as empty will be deleted
+									if (next(_qgd.Quests)) then			-- check for more quest
+										DropCount.DB.Quest:Write(_qg,_qgd,faction);
+									end
+									break;
+								end
+							end
+							if (not next(_qgd.Quests)) then				-- check for empty quest list
+								fTable[_qg]=nil;
+								Table:PurgeCache(DM_WHO,true);
+								break;
+							end
+						end
+						MT:Yield(true);		-- maintain low profile
+					end
+				end
+			end
+		end
+	end
+	Table:PurgeCache(DM_WHO);
+--print("Double item-QG done");
+
+	if (DropCount.Debug) then DropCount:Chat("Cleaning QG database done.",.8,.8,1); end
+end
+
 function DropCount.MT:ConvertAndMerge()
+	-- Check for really old stuff
 	while (DropCount.Loaded<=10) do MT:Yield(true); end
 	if (not LootCount_DropCount_DB.Converted or LootCount_DropCount_DB.MergedData<5) then
 		LootCount_DropCount_DB.MergedData=5;
@@ -3755,19 +4261,112 @@ function DropCount.MT:ConvertAndMerge()
 		LootCount_DropCount_DB.Item={};
 		LootCount_DropCount_DB.Quest={};
 		LootCount_DropCount_DB.Count={};
-		collectgarbage("collect");
+--		collectgarbage("collect");
 	end
 	if (not LootCount_DropCount_MergeData) then return; end
 
+	-- Strip data
+	for _,md in ipairs(LootCount_DropCount_MergeData) do
+		if (LootCount_DropCount_DB.DontFollowMobsAndDrops) then
+			wipe(LootCount_DropCount_DB.Count); wipe(md.Count);
+			wipe(LootCount_DropCount_DB.Item); wipe(md.Items);
+		end
+		if (LootCount_DropCount_DB.DontFollowVendors) then
+			wipe(LootCount_DropCount_DB.Vendor); wipe(md.Vendor);
+		end
+		if (LootCount_DropCount_DB.DontFollowQuests) then
+			wipe(LootCount_DropCount_DB.Quest); wipe(md.Quest);
+		end
+		if (LootCount_DropCount_DB.DontFollowTrainers) then
+			wipe(LootCount_DropCount_DB.Trainer); wipe(md.Trainer);
+		end
+		if (LootCount_DropCount_DB.DontFollowForges) then
+			wipe(LootCount_DropCount_DB.Forge); wipe(md.Forge);
+		end
+	end
+--DropCount.Debug=true;
+
+	-- convert known GUID/name
+	if (LootCount_DropCount_MergeData.Version~=LootCount_DropCount_DB.MergedData) then
+		DropCount:Chat("New version of DropCount has been installed.",.6,1,.6);
+		DropCount:Chat("Due to WoW loot bugs (and some users' unskilled DropCount hacks), an extended database check has been implemented. This is a must for it to work at all with Pandaria.",.6,.6,1);
+		DropCount:Chat("During this time, your fps will drop to about 30. I am very sorry for this inconvenience. This will only happen once after installing a new version, so it is recommended to let it finish.",.6,.6,1);
+		DropCount:Chat("You can log out during this period if you so wish, and the operation will restart when you log back in. You will be presented with a summary when all operations have finished.",.6,.6,1);
+	end
+
+	-- Check for hotwired addons for aoe loot changes
+	if (not LootCount_DropCount_DB.FixedHotWired or DropCount.Debug) then
+		DropCount:Chat("Running post-Pandaria database clean-up...");
+		DropCount.MT.DB.Maintenance:_KillHotwiredLoot(LootCount_DropCount_DB,true);	-- Check for Pandaria hotwired addons
+		LootCount_DropCount_DB.FixedHotWired=time();
+	end
+
+	-- convert known GUID/name
+	if (LootCount_DropCount_MergeData.Version~=LootCount_DropCount_DB.MergedData) then
+		DropCount:Chat("Running database integrity check...");
+--print("Setting GUID in mergedata from local...");
+		for _,md in ipairs(LootCount_DropCount_MergeData) do
+			if (md.Count) then
+				for name,rawn in pairs(md.Count) do
+					local datan=DropCount.DB.Count:Read(name,md.Count);
+					if (not datan.Name) then	-- need conversion
+						for sguid,rawg in pairs(LootCount_DropCount_DB.Count) do
+							if (rawg:find(name,1,true) and strlen(sguid)==4 and tonumber(sguid,16)) then
+								local datag=DropCount.DB.Count:Read(sguid);
+								if (datag.Name==name) then
+									DropCount.WoW5:ConvertMOB(name,sguid,md);
+									Table:PurgeCache(DM_WHO);
+								end
+								MT:Yield();
+							end
+						end
+					end
+					MT:Yield();
+				end
+				Table:PurgeCache(DM_WHO);
+--print("Setting GUID in local from mergedata...");
+				for name,rawn in pairs(LootCount_DropCount_DB.Count) do
+					local datan=DropCount.DB.Count:Read(name);
+					if (not datan.Name) then	-- need conversion
+						for sguid,rawg in pairs(md.Count) do
+							if (rawg:find(name,1,true) and strlen(sguid)==4 and tonumber(sguid,16)) then
+								local datag=DropCount.DB.Count:Read(sguid,md.Count);
+								if (datag.Name==name) then
+									DropCount.WoW5:ConvertMOB(name,sguid);
+									Table:PurgeCache(DM_WHO);
+								end
+								MT:Yield();
+							end
+						end
+					end
+					MT:Yield();
+				end
+				Table:PurgeCache(DM_WHO);
+			end
+		end
+--print("GUIDs inserted");
+	end
+
 	if (DropCount_Local_Code_Enabled) then DropCount.MT.DB:CleanImport(); end
 	DropCount.Tracker.CleanImport.Cleaned=true;
+
+	-- Merge and make tidiefy a bit
 	DropCount.MT:MergeDatabase();
-	LootCount_DropCount_MergeData=nil;
-	collectgarbage("collect");
+	wipe(LootCount_DropCount_MergeData); LootCount_DropCount_MergeData=nil;
+
+	if (LootCount_DropCount_DB.MergedData~=LootCount_DropCount_DB.CleanedData) then
+		DropCount.MT.DB:CleanDatabase();	-- no need all the time
+		LootCount_DropCount_DB.CleanedData=LootCount_DropCount_DB.MergedData;
+	end
+	if (LootCount_DropCount_DB.MergedData~=LootCount_DropCount_DB.CleanedDataQG) then
+		DropCount.MT.DB:CleanDatabaseQG();	-- no need all the time
+		LootCount_DropCount_DB.CleanedDataQG=LootCount_DropCount_DB.MergedData;
+	end
+--	collectgarbage("collect");
 end
 
 function DropCount:RemoveFromDatabase()
-	-- Delete from database
+	-- Delete quests from database
 	if (LootCount_DropCount_RemoveData.Quest and LootCount_DropCount_DB.Quest) then
 		for faction,fTable in pairs(LootCount_DropCount_RemoveData.Quest) do
 			for npc,_ in pairs(fTable) do
@@ -3804,24 +4403,28 @@ function DropCount:RemoveFromDatabase()
 			end
 		end
 	end
+	-- delete drops from creatures
 	if (LootCount_DropCount_RemoveData.Count and LootCount_DropCount_DB.Count) then
-		for npc,nTable in pairs(LootCount_DropCount_RemoveData.Count) do
+		for npc,nData in pairs(LootCount_DropCount_RemoveData.Count) do
 			if (LootCount_DropCount_DB.Count[npc]) then
-				for entry,_ in pairs(nTable) do
-					local mTable=DropCount.DB.Count:Read(npc);
-					if (mTable[entry]) then
-						mTable[entry]=nil;	-- Kill it
-						DropCount.DB.Count:Write(npc,mTable);
-						if (entry=="Kill") then entry="Name"; end
-						DropCount:RemoveFromItem(entry,npc);
+				for section,item in pairs(nData) do
+					local iSect=section;
+					if (iSect=="Kill") then iSect="Name"; end
+					if (type(item)=="table") then				-- remove named items
+						for _,item in pairs(item) do
+							DropCount:RemoveMobFromItem(item,npc,iSect);	-- remove from item loot list
+						end
+					elseif (type(item)=="boolean") then			-- remove entire section
+						local mTable=DropCount.DB.Count:Read(npc);
+						if (mTable[section]) then
+							mTable[section]=nil;					-- Kill it
+							DropCount.DB.Count:Write(npc,mTable);	-- save it
+							DropCount:RemoveFromItems(iSect,npc);	-- remove from all loot lists
+						end
 					end
 				end
 			end
 		end
-	end
-
-	while (not DropCount:IsEmpty(LootCount_DropCount_RemoveData.Generic)) do
-		DropCount:SeekAndDestroy_Start(LootCount_DropCount_RemoveData.Generic,LootCount_DropCount_DB);
 	end
 
 	-- Remove qgivers in neutral if it's in horde or alliance as well
@@ -3834,56 +4437,24 @@ function DropCount:RemoveFromDatabase()
 			end
 		end
 	end
-end
 
-function DropCount:SeekAndDestroy_Start(seekTable,goalTable)
-	local access;
-	for topLevel,tTable in pairs(seekTable) do
-		if (DropCount:IsEmpty(tTable) or not goalTable[topLevel]) then
-			seekTable[topLevel]=nil;
-			return;
-		end
-		if (DropCount.DB[topLevel]) then access=DropCount.DB[topLevel];
-		else access=DropCount.DB.Generic; end
-		for entry,eData in pairs(tTable) do
-			if (type(eData)~="table") then
-				seekTable[topLevel][entry]=nil;
-				goalTable[topLevel][entry]=nil;
-				return;
-			elseif (DropCount:IsEmpty(eData) or not goalTable[topLevel][entry]) then
-				seekTable[topLevel][entry]=nil;
-				return;
+	-- remove items from game
+	if (LootCount_DropCount_RemoveData.Item and LootCount_DropCount_DB.Item) then
+		for item,iRaw in pairs(LootCount_DropCount_RemoveData.Item) do
+			if (iRaw==false) then
+				LootCount_DropCount_DB.Item[item]=nil;
 			end
-			local dTable=access:Read(entry,goalTable[topLevel]);
-			DropCount:SeekAndDestroy_Seek(tTable[entry],dTable);
-			access:Write(entry,dTable);
-			return;
 		end
-	end
-end
-
-function DropCount:SeekAndDestroy_Seek(seekTable,goalTable)
-	for entry,eData in pairs(seekTable) do
-		if (type(eData)~="table") then
-			seekTable[entry]=nil;
-			goalTable[entry]=nil;					-- Deleted something
-			return;
-		elseif (DropCount:IsEmpty(eData) or not goalTable[entry]) then
-			seekTable[entry]=nil;					-- Book-keeping only
-			return;
-		end
-		DropCount:SeekAndDestroy_Seek(seekTable[entry],goalTable[entry]);
-		return;
 	end
 end
 
 function DropCount:IsEmpty(check)
 	if (not check) then return true; end
-	for _,_ in pairs(check) do return nil; end
+	if (next(check)) then return nil; end
 	return true;
 end
 
-function DropCount:RemoveFromItem(section,npc,base)
+function DropCount:RemoveFromItems(section,npc,base,y)
 	if (not base) then base=LootCount_DropCount_DB; end
 	if (not base.Item) then return; end
 	for item,iData in pairs(base.Item) do
@@ -3892,6 +4463,7 @@ function DropCount:RemoveFromItem(section,npc,base)
 			if (iTable[section]) then
 				iTable[section][npc]=nil;					-- Kill it
 				DropCount.DB.Item:Write(item,iTable,base.Item);
+				if (y) then MT:Yield(); end
 			end
 		end
 	end
@@ -3911,61 +4483,40 @@ function DropCount.MT:MergeStatus()
 	end
 end
 
-function DropCount.Convert:Seven()
-	local f1,f2=nil,nil;
-	if (LootCount_DropCount_DB.Quest and LootCount_DropCount_DB.Quest.Neutral) then
-		for faction,fData in pairs(LootCount_DropCount_DB.Quest) do
-			if (faction~="Neutral") then
-				if (not f1) then f1=faction;
-				elseif (not f2) then f2=faction; end
-			end
-		end
-		for npc,nData in pairs(LootCount_DropCount_DB.Quest.Neutral) do
-			if (not LootCount_DropCount_DB.Quest[f1][npc]) then
-				LootCount_DropCount_DB.Quest[f1][npc]=nData;
-			end
-			if (not LootCount_DropCount_DB.Quest[f2][npc]) then
-				LootCount_DropCount_DB.Quest[f2][npc]=nData;
-			end
-		end
-		LootCount_DropCount_DB.Quest.Neutral=nil;
-	end
-	if (LootCount_DropCount_DB.Converted==6) then
-		LootCount_DropCount_DB.Converted=7;
-		collectgarbage("collect");
-	end
-end
-
 function DropCount.MT:MergeDatabase()
-	if (not LootCount_DropCount_MergeData) then return true; end
+	if (not LootCount_DropCount_MergeData) then return false; end
 	if (not LootCount_DropCount_DB.MergedData) then LootCount_DropCount_DB.MergedData=0; end
-	if (LootCount_DropCount_MergeData.Version==LootCount_DropCount_DB.MergedData) then return true; end
+	if (LootCount_DropCount_MergeData.Version==LootCount_DropCount_DB.MergedData) then return false; end
 
 	DropCount.Tracker.Merge.Total=0;
 	DropCount.Tracker.Merge.Goal=0;
 	DropCount.Tracker.Merge.Printed=-1;
-	for _,_ in pairs(LootCount_DropCount_MergeData.Vendor) do DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1; MT:Yield(); end
-	for _,_ in pairs(LootCount_DropCount_MergeData.Count) do DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1; MT:Yield(); end
-	for _,_ in pairs(LootCount_DropCount_MergeData.Item) do DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1; MT:Yield(); end
-	for _,bT in pairs(LootCount_DropCount_MergeData.Book) do
-		for _,_ in pairs(bT) do
-			DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1;
-			MT:Yield();
+	local sects=0;
+	for _,md in ipairs(LootCount_DropCount_MergeData) do
+		sects=sects+1;
+		for _,_ in pairs(md.Vendor) do DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1; MT:Yield(); end
+		for _,_ in pairs(md.Count) do DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1; MT:Yield(); end
+		for _,_ in pairs(md.Item) do DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1; MT:Yield(); end
+		for _,bT in pairs(md.Book) do
+			for _,_ in pairs(bT) do
+				DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1;
+				MT:Yield();
+			end
 		end
-	end
-	for _,qT in pairs(LootCount_DropCount_MergeData.Quest) do
-		for _,_ in pairs(qT) do
-			DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1;
-			MT:Yield();
+		for _,qT in pairs(md.Quest) do
+			for _,_ in pairs(qT) do
+				DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1;
+				MT:Yield();
+			end
 		end
-	end
-	if (not LootCount_DropCount_MergeData.Forge) then LootCount_DropCount_MergeData.Forge={}; end
-	for _,_ in pairs(LootCount_DropCount_MergeData.Forge) do DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1; MT:Yield(); end
-	if (not LootCount_DropCount_MergeData.Trainer) then LootCount_DropCount_MergeData.Trainer={ [CONST.MYFACTION]={}, }; end
-	for _,tT in pairs(LootCount_DropCount_MergeData.Trainer) do
-		for _,_ in pairs(tT) do
-			DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1;
-			MT:Yield();
+		if (not md.Forge) then md.Forge={}; end
+		for _,_ in pairs(md.Forge) do DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1; MT:Yield(); end
+		if (not md.Trainer) then md.Trainer={ [CONST.MYFACTION]={}, }; end
+		for _,tT in pairs(md.Trainer) do
+			for _,_ in pairs(tT) do
+				DropCount.Tracker.Merge.Goal=DropCount.Tracker.Merge.Goal+1;
+				MT:Yield();
+			end
 		end
 	end
 	DropCount:Chat(LOOTCOUNT_DROPCOUNT_VERSIONTEXT,1,.3,.3);
@@ -3973,250 +4524,258 @@ function DropCount.MT:MergeDatabase()
 	DropCount:Chat("A summary will be presented when the process is done.",1,.6,.6);
 	DropCount:Chat("This will take a few minutes, depending on the speed of your computer.",1,.6,.6);
 	DropCount:Chat("You can play WoW while this is running is the background, even thought you may experience some lag or lower FPS.",1,.6,.6);
-
-	-- Forges
-	for area in pairs(LootCount_DropCount_MergeData.Forge) do
-		local merge=DropCount.DB.Forge:Read(area,LootCount_DropCount_MergeData.Forge);
-		local localF=DropCount.DB.Forge:Read(area);
-		if (localF) then
-			for _,mData in pairs(merge) do
-				for index,lData in pairs(localF) do
-					MT:Yield();
-					local mX,mY=mData:match("(.+)_(.+)"); mX=tonumber(mX); mY=tonumber(mY);
-					local lX,lY=fRaw:match("(.+)_(.+)"); lX=tonumber(lX); lY=tonumber(lY);
-					if (mX>=lX-1 and mX<=lX+1 and mY>=lY-1 and mY<=lY+1) then
-						localF[index]=mX.."_"..mY;			-- set new position
-						DropCount.Tracker.Merge.Forge.Updated=DropCount.Tracker.Merge.Forge.Updated+1;
-					else
-						table.insert(localF,mX.."_"..mY);	-- add new forge
-						DropCount.Tracker.Merge.Forge.New=DropCount.Tracker.Merge.Forge.New+1;
-					end
-				end
-			end
-			DropCount.DB.Forge:Write(area,localF);			-- save modified area data
-		else
-			DropCount.DB.Forge:Write(area,merge);			-- save new area
-		end
-		DropCount.MT:MergeStatus();	-- Will handle yield
+	if (DropCount.Debug) then
+		DropCount:Chat("===> "..sects.." sections.",1,.6,.6);
 	end
 
-	-- Trainers
-	for faction,fData in pairs(LootCount_DropCount_MergeData.Trainer) do
-		if (not DropCount.Tracker.Merge.Trainer.New[faction]) then DropCount.Tracker.Merge.Trainer.New[faction]=0; end
-		if (not DropCount.Tracker.Merge.Trainer.Updated[faction]) then DropCount.Tracker.Merge.Trainer.Updated[faction]=0; end
-		if (not LootCount_DropCount_DB.Trainer[faction]) then LootCount_DropCount_DB.Trainer[faction]={}; end
-		for trainer,tData in pairs(fData) do
-			if (not LootCount_DropCount_DB.Trainer[faction][trainer]) then
-				DropCount.Tracker.Merge.Trainer.New[faction]=DropCount.Tracker.Merge.Trainer.New[faction]+1;
+	for s,md in ipairs(LootCount_DropCount_MergeData) do
+		-- Forges
+		for area in pairs(md.Forge) do
+			local merge=DropCount.DB.Forge:Read(area,md.Forge);
+			local localF=DropCount.DB.Forge:Read(area);
+			if (localF) then
+				for mi,mData in pairs(merge) do
+					for index,lData in pairs(localF) do
+						MT:Yield();
+						local mX,mY=mData:match("(.+)_(.+)"); mX=tonumber(mX); mY=tonumber(mY);
+						local lX,lY=lData:match("(.+)_(.+)"); lX=tonumber(lX); lY=tonumber(lY);
+						if (mX>=lX-1 and mX<=lX+1 and mY>=lY-1 and mY<=lY+1) then
+							localF[index]=mX.."_"..mY;			-- set new position
+							DropCount.Tracker.Merge.Forge.Updated=DropCount.Tracker.Merge.Forge.Updated+1;
+							merge[mi]=nil;
+						end
+					end
+				end
+				for _,mData in pairs(merge) do
+					MT:Yield();
+					table.insert(localF,mData);		-- add new forge
+					DropCount.Tracker.Merge.Forge.New=DropCount.Tracker.Merge.Forge.New+1;
+				end
+				DropCount.DB.Forge:Write(area,localF);			-- save modified area data
 			else
-				DropCount.Tracker.Merge.Trainer.Updated[faction]=DropCount.Tracker.Merge.Trainer.Updated[faction]+1;
+				DropCount.DB.Forge:Write(area,merge);			-- save new area
 			end
-			LootCount_DropCount_DB.Trainer[faction][trainer]=tData;
 			DropCount.MT:MergeStatus();	-- Will handle yield
 		end
-	end
 
-	-- Vendors
-	if (LootCount_DropCount_MergeData.Vendor and not DropCount:IsEmpty(LootCount_DropCount_MergeData.Vendor)) then
-		if (not LootCount_DropCount_DB.Vendor) then LootCount_DropCount_DB.Vendor={}; end
-		for vend,_ in pairs(LootCount_DropCount_MergeData.Vendor) do
-			local vTable=DropCount.DB.Vendor:Read(vend,LootCount_DropCount_MergeData.Vendor);
-			local faction=vTable.Faction;
-			if (not faction) then
-				_,_,_,faction,_=DropCount.DB.Vendor:ReadBaseData(vend);
-				if (not faction) then faction="Unknown"; end			-- Unknown faction
-			end
-			if (not DropCount.Tracker.Merge.Vendor.New[faction]) then DropCount.Tracker.Merge.Vendor.New[faction]=0; end
-			if (not DropCount.Tracker.Merge.Vendor.Updated[faction]) then DropCount.Tracker.Merge.Vendor.Updated[faction]=0; end
-			if (not LootCount_DropCount_DB.Vendor[vend]) then
-				DropCount.DB.Vendor:Write(vend,vTable);
-				DropCount.Tracker.Merge.Vendor.New[faction]=DropCount.Tracker.Merge.Vendor.New[faction]+1;
-			else
-				local updated=nil;
-				local tv=DropCount.DB.Vendor:Read(vend);
-				if (not vTable.X or not vTable.Y) then vTable.X=0; vTable.Y=0; end
-				if ((vTable.X and vTable.Y and vTable.Zone and (vTable.X>0 or vTable.Y>0)) and
-					((tv.X and tv.Y and tv.Zone and (tv.X>0 or tv.Y>0)))) then
-					if (math.floor(tv.X)~=math.floor(vTable.X) or
-						math.floor(tv.Y)~=math.floor(vTable.Y) or
-						tv.Zone~=vTable.Zone) then
-						updated=true;
-					end
-					tv.X=vTable.X; tv.Y=vTable.Y; tv.Zone=vTable.Zone;
-					if (vTable.Faction) then tv.Faction=vTable.Faction; end
-					if (vTable.Map) then tv.Map=vTable.Map; end
+		-- Trainers
+		for faction,fData in pairs(md.Trainer) do
+			if (not DropCount.Tracker.Merge.Trainer.New[faction]) then DropCount.Tracker.Merge.Trainer.New[faction]=0; end
+			if (not DropCount.Tracker.Merge.Trainer.Updated[faction]) then DropCount.Tracker.Merge.Trainer.Updated[faction]=0; end
+			if (not LootCount_DropCount_DB.Trainer[faction]) then LootCount_DropCount_DB.Trainer[faction]={}; end
+			for trainer,tData in pairs(fData) do
+				if (not LootCount_DropCount_DB.Trainer[faction][trainer]) then
+					DropCount.Tracker.Merge.Trainer.New[faction]=DropCount.Tracker.Merge.Trainer.New[faction]+1;
+				else
+					DropCount.Tracker.Merge.Trainer.Updated[faction]=DropCount.Tracker.Merge.Trainer.Updated[faction]+1;
 				end
-				if (vTable.Items) then
-					if (not tv.Items) then
-						tv.Items=DropCount:CopyTable(vTable.Items);
-						updated=true;
-					else
-						for item,iTable in pairs(vTable.Items) do
-							if (not tv.Items[item]) then
-								tv.Items[item]=DropCount:CopyTable(iTable);
-								updated=true;
-							else
-								if (iTable.Count~=-2 and tv.Items[item].Count==-2) then
-									tv.Items[item].Count=iTable.Count;
+				LootCount_DropCount_DB.Trainer[faction][trainer]=tData;
+				DropCount.MT:MergeStatus();	-- Will handle yield
+			end
+		end
+
+		-- Vendors
+		if (md.Vendor and not DropCount:IsEmpty(md.Vendor)) then
+			if (not LootCount_DropCount_DB.Vendor) then LootCount_DropCount_DB.Vendor={}; end
+			for vend,_ in pairs(md.Vendor) do
+				local vTable=DropCount.DB.Vendor:Read(vend,md.Vendor);
+				local faction=vTable.Faction;
+				if (not faction) then
+					_,_,_,faction,_=DropCount.DB.Vendor:ReadBaseData(vend);
+					if (not faction) then faction="Unknown"; end			-- Unknown faction
+				end
+				if (not DropCount.Tracker.Merge.Vendor.New[faction]) then DropCount.Tracker.Merge.Vendor.New[faction]=0; end
+				if (not DropCount.Tracker.Merge.Vendor.Updated[faction]) then DropCount.Tracker.Merge.Vendor.Updated[faction]=0; end
+				if (not LootCount_DropCount_DB.Vendor[vend]) then
+					DropCount.DB.Vendor:Write(vend,vTable);
+					DropCount.Tracker.Merge.Vendor.New[faction]=DropCount.Tracker.Merge.Vendor.New[faction]+1;
+				else
+					local updated=nil;
+					local tv=DropCount.DB.Vendor:Read(vend);
+					if (not vTable.X or not vTable.Y) then vTable.X=0; vTable.Y=0; end
+					if ((vTable.X and vTable.Y and vTable.Zone and (vTable.X>0 or vTable.Y>0)) and
+						((tv.X and tv.Y and tv.Zone and (tv.X>0 or tv.Y>0)))) then
+						if (math.floor(tv.X)~=math.floor(vTable.X) or
+							math.floor(tv.Y)~=math.floor(vTable.Y) or
+							tv.Zone~=vTable.Zone) then
+							updated=true;
+						end
+						tv.X=vTable.X; tv.Y=vTable.Y; tv.Zone=vTable.Zone;
+						if (vTable.Faction) then tv.Faction=vTable.Faction; end
+						if (vTable.Map) then tv.Map=vTable.Map; end
+					end
+					if (vTable.Items) then
+						if (not tv.Items) then
+							tv.Items=DropCount:CopyTable(vTable.Items);
+							updated=true;
+						else
+							for item,iTable in pairs(vTable.Items) do
+								if (not tv.Items[item]) then
+									tv.Items[item]=DropCount:CopyTable(iTable);
 									updated=true;
+								else
+									if (iTable.Count~=-2 and tv.Items[item].Count==-2) then
+										tv.Items[item].Count=iTable.Count;
+										updated=true;
+									end
 								end
 							end
 						end
 					end
-				end
-				if (updated) then
-					DropCount.Tracker.Merge.Vendor.Updated[faction]=DropCount.Tracker.Merge.Vendor.Updated[faction]+1;
-					DropCount.DB.Vendor:Write(vend,tv);
-				end
-			end
-			LootCount_DropCount_MergeData.Vendor[vend]=nil;	-- Done this vendor
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Vendor -> MS in "..vend);
-			DropCount.MT:MergeStatus();	-- Will handle yield
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Vendor -> MS out "..vend);
-		end
-	end
-
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Books");
-	-- Books
-	if (LootCount_DropCount_MergeData.Book and not DropCount:IsEmpty(LootCount_DropCount_MergeData.Book)) then
-		if (not LootCount_DropCount_DB.Book) then LootCount_DropCount_DB.Book={}; end
-		for title,bTable in pairs(LootCount_DropCount_MergeData.Book) do
-			local newB,updB=nil,nil;
-			for index,vTable in pairs(bTable) do
-				local newT,updT=DropCount:SaveBook(title,vTable.Zone,vTable.X,vTable.Y,vTable.Map);
-				if (not newB) then
-					if (newT>0) then newB=true; updB=nil;
-					elseif (updT) then updB=true; end
-				end
-			end
-			if (newB) then DropCount.Tracker.Merge.Book.New=DropCount.Tracker.Merge.Book.New+1; end
-			if (updB) then DropCount.Tracker.Merge.Book.Updated=DropCount.Tracker.Merge.Book.Updated+1; end
-			LootCount_DropCount_MergeData.Book[title]=nil;	-- Done this volume
-			DropCount.MT:MergeStatus();	-- Will handle yield
-		end
-	end
-
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Quest");
-	-- Quests
-	if (LootCount_DropCount_MergeData.Quest and not DropCount:IsEmpty(LootCount_DropCount_MergeData.Quest)) then
-		if (not LootCount_DropCount_DB.Quest) then LootCount_DropCount_DB.Quest={}; end
-		-- Traverse hardcoded
-		for faction,fTable in pairs(LootCount_DropCount_MergeData.Quest) do
-			if (not LootCount_DropCount_DB.Quest[faction]) then
-				-- Don't have this faction, so take all.
-				LootCount_DropCount_DB.Quest[faction]=DropCount:CopyTable(fTable);
-			else
-				DropCount.Tracker.Merge.Quest.New[faction]=0;
-				DropCount.Tracker.Merge.Quest.Updated[faction]=0;
-				-- Traverse hardcoded npcs in this faction
-				for npc,nEntry in pairs(fTable) do
-					local nTable=DropCount.DB.Quest:Read(faction,npc,LootCount_DropCount_MergeData.Quest);
-					if (not LootCount_DropCount_DB.Quest[faction][npc]) then
-						-- Don't have it, so take all
-						DropCount.DB.Quest:Write(npc,nTable,faction);
-						DropCount.Tracker.Merge.Quest.New[faction]=DropCount.Tracker.Merge.Quest.New[faction]+1;
-					else
-						local updated=nil;
-						-- Have it, so update location and merge quests
-						local tn=DropCount.DB.Quest:Read(faction,npc);
-						tn.X=nTable.X; tn.Y=nTable.Y;
-						if (nTable.Map) then tn.Map=nTable.Map; end
-						tn.Zone=nTable.Zone;
-						if (not tn.Quests) then tn.Quests={}; end
---						local fromIndex=1;
---							fromIndex=fromIndex+1;
---						end
-						if (updated) then
-							DropCount.DB.Quest:Write(npc,tn,faction);
-							DropCount.Tracker.Merge.Quest.Updated[faction]=DropCount.Tracker.Merge.Quest.Updated[faction]+1;
-						end
+					if (updated) then
+						DropCount.Tracker.Merge.Vendor.Updated[faction]=DropCount.Tracker.Merge.Vendor.Updated[faction]+1;
+						DropCount.DB.Vendor:Write(vend,tv);
 					end
-					LootCount_DropCount_MergeData.Quest[faction][npc]=nil;
+				end
+				md.Vendor[vend]=nil;	-- Done this vendor
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Vendor -> MS in "..vend);
+				DropCount.MT:MergeStatus();	-- Will handle yield
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Vendor -> MS out "..vend);
+			end
+		end
+
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Books");
+		-- Books
+		if (md.Book and not DropCount:IsEmpty(md.Book)) then
+			if (not LootCount_DropCount_DB.Book) then LootCount_DropCount_DB.Book={}; end
+			for title,bTable in pairs(md.Book) do
+				local newB,updB=nil,nil;
+				for index,vTable in pairs(bTable) do
+					local newT,updT=DropCount:SaveBook(title,vTable.Zone,vTable.X,vTable.Y,vTable.Map);
+					if (not newB) then
+						if (newT>0) then newB=true; updB=nil;
+						elseif (updT) then updB=true; end
+					end
+				end
+				if (newB) then DropCount.Tracker.Merge.Book.New=DropCount.Tracker.Merge.Book.New+1; end
+				if (updB) then DropCount.Tracker.Merge.Book.Updated=DropCount.Tracker.Merge.Book.Updated+1; end
+				md.Book[title]=nil;	-- Done this volume
+				DropCount.MT:MergeStatus();	-- Will handle yield
+			end
+		end
+
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Quest");
+		-- Quests
+		if (md.Quest and not DropCount:IsEmpty(md.Quest)) then
+			if (not LootCount_DropCount_DB.Quest) then LootCount_DropCount_DB.Quest={}; end
+			-- Traverse hardcoded
+			for faction,fTable in pairs(md.Quest) do
+				if (not LootCount_DropCount_DB.Quest[faction]) then
+					-- Don't have this faction, so take all.
+					LootCount_DropCount_DB.Quest[faction]=DropCount:CopyTable(fTable);
+				else
+					DropCount.Tracker.Merge.Quest.New[faction]=0;
+					DropCount.Tracker.Merge.Quest.Updated[faction]=0;
+					-- Traverse hardcoded npcs in this faction
+					for npc,nEntry in pairs(fTable) do
+						local nTable=DropCount.DB.Quest:Read(faction,npc,md.Quest);
+						if (not LootCount_DropCount_DB.Quest[faction][npc]) then
+							-- Don't have it, so take all
+							DropCount.DB.Quest:Write(npc,nTable,faction);
+							DropCount.Tracker.Merge.Quest.New[faction]=DropCount.Tracker.Merge.Quest.New[faction]+1;
+						else
+							local updated=nil;
+							-- Have it, so update location and merge quests
+							local tn=DropCount.DB.Quest:Read(faction,npc);
+							tn.X=nTable.X; tn.Y=nTable.Y;
+							if (nTable.Map) then tn.Map=nTable.Map; end
+							tn.Zone=nTable.Zone;
+							if (not tn.Quests) then tn.Quests={}; end
+	--						local fromIndex=1;
+	--							fromIndex=fromIndex+1;
+	--						end
+							if (updated) then
+								DropCount.DB.Quest:Write(npc,tn,faction);
+								DropCount.Tracker.Merge.Quest.Updated[faction]=DropCount.Tracker.Merge.Quest.Updated[faction]+1;
+							end
+						end
+						md.Quest[faction][npc]=nil;
+						DropCount.MT:MergeStatus();
+					end
+				end
+			end
+		end
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Seven");
+--		DropCount.Convert:Seven();
+
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Drops");
+		-- Merge drops
+		if (md.Count and md.Item) then
+			if (not DropCount:IsEmpty(md.Count)) then
+				local strict=nil; if (LootCount_DropCount_DB.MergedData==4) then strict=true; end
+				if (not LootCount_DropCount_DB.Count) then LootCount_DropCount_DB.Count={}; end
+				if (not LootCount_DropCount_DB.Item) then LootCount_DropCount_DB.Item={}; end
+				for mob,mTable in pairs(md.Count) do
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> "..mob.." in");
+					local newMob,updatedMob=DropCount.MT:MergeMOB(mob,s,strict);
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> "..mob.." out");
+					if (newMob>=0) then
+						DropCount.Tracker.Merge.Mob.New=DropCount.Tracker.Merge.Mob.New+newMob;
+						DropCount.Tracker.Merge.Mob.Updated=DropCount.Tracker.Merge.Mob.Updated+updatedMob;
+						md.Count[mob]=nil;
+					end
 					DropCount.MT:MergeStatus();
 				end
 			end
 		end
-	end
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Seven");
-	DropCount.Convert:Seven();
 
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Drops");
-	-- Merge drops
-	if (LootCount_DropCount_MergeData.Count and LootCount_DropCount_MergeData.Item) then
-		if (not DropCount:IsEmpty(LootCount_DropCount_MergeData.Count)) then
-			local strict=nil; if (LootCount_DropCount_DB.MergedData==4) then strict=true; end
-			if (not LootCount_DropCount_DB.Count) then LootCount_DropCount_DB.Count={}; end
-			if (not LootCount_DropCount_DB.Item) then LootCount_DropCount_DB.Item={}; end
-			for mob,mTable in pairs(LootCount_DropCount_MergeData.Count) do
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> "..mob.." in");
-				local newMob,updatedMob=DropCount.MT:MergeMOB(mob,strict);
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> "..mob.." out");
-				if (newMob>=0) then
-					DropCount.Tracker.Merge.Mob.New=DropCount.Tracker.Merge.Mob.New+newMob;
-					DropCount.Tracker.Merge.Mob.Updated=DropCount.Tracker.Merge.Mob.Updated+updatedMob;
-					LootCount_DropCount_MergeData.Count[mob]=nil;
-				end
-				DropCount.MT:MergeStatus();
-			end
-		end
-	end
-
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Area");
-	-- Merge best areas
-	if (LootCount_DropCount_MergeData.Item and LootCount_DropCount_DB.Item) then
-		if (not DropCount:IsEmpty(LootCount_DropCount_MergeData.Item)) then
-			for item,iData in pairs(LootCount_DropCount_MergeData.Item) do
-				if (LootCount_DropCount_DB.Item[item]) then
-					local miData=DropCount.DB.Item:Read(item,LootCount_DropCount_MergeData.Item);
-					if (miData and miData.Best) then
-						local store=nil;
-						local saveit=nil;
-						local liData=DropCount.DB.Item:Read(item);
-						if (liData) then
-							if (not liData.Best) then store=true;
-							else
-								if (liData.Best.Location==miData.Best.Location) then store=true; end
-								if (miData.Best.Score>liData.Best.Score) then store=true; end
-							end
-							if (store) then liData.Best=miData.Best; saveit=true; store=nil; end
-							if (not liData.BestW) then store=true;
-							elseif (miData.BestW) then
-								if (liData.BestW.Location==miData.BestW.Location) then store=true; end
-								if (miData.BestW.Score>liData.BestW.Score) then store=true; end
-							end
-							if (store) then liData.BestW=miData.BestW; saveit=true; store=nil; end
-							if (liData.Best and liData.BestW) then
-								if (liData.BestW.Score>=liData.Best.Score) then
-									liData.Best=liData.BestW;
-									liData.BestW=nil;
-									saveit=true;
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Area");
+		-- Merge best areas
+		if (md.Item and LootCount_DropCount_DB.Item) then
+			if (not DropCount:IsEmpty(md.Item)) then
+				for item,iData in pairs(md.Item) do
+					if (LootCount_DropCount_DB.Item[item]) then
+						local miData=DropCount.DB.Item:Read(item,md.Item);
+						if (miData and miData.Best) then
+							local store=nil;
+							local saveit=nil;
+							local liData=DropCount.DB.Item:Read(item);
+							if (liData) then
+								if (not liData.Best) then store=true;
+								else
+									if (liData.Best.Location==miData.Best.Location) then store=true; end
+									if (miData.Best.Score>liData.Best.Score) then store=true; end
 								end
-							end
-							if (saveit) then
-								DropCount.DB.Item:Write(item,liData);
-								DropCount.Tracker.Merge.Item.Updated=DropCount.Tracker.Merge.Item.Updated+1;
+								if (store) then liData.Best=miData.Best; saveit=true; store=nil; end
+								if (not liData.BestW) then store=true;
+								elseif (miData.BestW) then
+									if (liData.BestW.Location==miData.BestW.Location) then store=true; end
+									if (miData.BestW.Score>liData.BestW.Score) then store=true; end
+								end
+								if (store) then liData.BestW=miData.BestW; saveit=true; store=nil; end
+								if (liData.Best and liData.BestW) then
+									if (liData.BestW.Score>=liData.Best.Score) then
+										liData.Best=liData.BestW;
+										liData.BestW=nil;
+										saveit=true;
+									end
+								end
+								if (saveit) then
+									DropCount.DB.Item:Write(item,liData);
+									DropCount.Tracker.Merge.Item.Updated=DropCount.Tracker.Merge.Item.Updated+1;
+								end
 							end
 						end
 					end
+					md.Item[item]=nil;
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Area -> MergeStatus in");
+					DropCount.MT:MergeStatus();
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Area -> MergeStatus out");
 				end
-				LootCount_DropCount_MergeData.Item[item]=nil;
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Area -> MergeStatus in");
-				DropCount.MT:MergeStatus();
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Area -> MergeStatus out");
 			end
 		end
-	end
 
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Maps");
-	-- Maps
-	if (LootCount_DropCount_Maps) then		-- I have maps
-		for Lang,LTable in pairs(LootCount_DropCount_Maps) do		-- Check all locales I have
-			if (LootCount_DropCount_MergeData[Lang]) then		-- Hardcoded has same locale
-				-- Blend tables
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Maps -> Copy in");
-				LootCount_DropCount_Maps[Lang]=DropCount:CopyTable(LootCount_DropCount_MergeData[Lang],LootCount_DropCount_Maps[Lang])
---DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Maps -> Copy out");
-				MT:Yield();
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Maps");
+		-- Maps
+		if (LootCount_DropCount_Maps) then		-- I have maps
+			for Lang,LTable in pairs(LootCount_DropCount_Maps) do		-- Check all locales I have
+				if (md[Lang]) then		-- Hardcoded has same locale
+					-- Blend tables
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Maps -> Copy in");
+					LootCount_DropCount_Maps[Lang]=DropCount:CopyTable(md[Lang],LootCount_DropCount_Maps[Lang])
+	--DropCount:Chat("-> DropCount.MT:MergeDatabase() -> Maps -> Copy out");
+					MT:Yield();
+				end
 			end
 		end
 	end
@@ -4266,9 +4825,7 @@ function DropCount.MT:MergeDatabase()
 	end
 	Table:PurgeCache(DM_WHO)
 
---	MT:Run("MM Vendor",DropCount.MT.Icons.MakeMM.Vendor);		--	DropCount.Icons.MakeMM:Vendor();
---	MT:Run("MM Book",DropCount.MT.Icons.MakeMM.Book);		--	DropCount.Icons.MakeMM:Book();
---	MT:Run("MM Quest",DropCount.MT.Icons.MakeMM.Quest);		--	DropCount.Icons.MakeMM:Quest();
+	return true;
 end
 
 function DropCount.DB:PreCheck(raw,contents)
@@ -4287,16 +4844,16 @@ end
 function DropCount.MT:ClearMobDrop(_,mob,section)
 	for item,iRaw in pairs(LootCount_DropCount_DB.Item) do
 		if (item) then
-			DropCount:RemoveMobFromItem(item,iRaw,mob,section);
+			DropCount:RemoveMobFromItem(item,mob,section,iRaw);
 			MT:Yield();
 		end
 	end
 end
 
-function DropCount:RemoveMobFromItem(item,iRaw,mob,section)
-	if (DropCount.DB:PreCheck(iRaw,mob)) then
+function DropCount:RemoveMobFromItem(item,mob,section,iRaw)
+	if (not iRaw or DropCount.DB:PreCheck(iRaw,mob)) then
 		local iTable=DropCount.DB.Item:Read(item);
-		if (iTable[section] and iTable[section][mob]) then
+		if (iTable and iTable[section] and iTable[section][mob]) then
 			iTable[section][mob]=nil;
 			DropCount.DB.Item:Write(item,iTable);
 		end
@@ -4338,7 +4895,7 @@ end
 --
 -- o Check if new data has more kills/skinnings than me
 --   If I don't have it at all, mine is set up as zero.
-function DropCount.MT:MergeMOB(mob,strict)
+function DropCount.MT:MergeMOB(mob,mdSection,strict)
 	local newMob,updatedMob=0,0;
 	local kill,skinning=nil,nil;
 	local tester;
@@ -4348,7 +4905,7 @@ function DropCount.MT:MergeMOB(mob,strict)
 
 --DropCount:Chat("-> DropCount.MT:MergeMOB -> ");
 
-	mData=DropCount.DB.Count:Read(mob,LootCount_DropCount_MergeData.Count);
+	mData=DropCount.DB.Count:Read(mob,LootCount_DropCount_MergeData[mdSection].Count);
 	cData=DropCount.DB.Count:Read(mob,LootCount_DropCount_DB.Count);
 	-- Create the mob if it doesn't exist
 	if (not cData and (mData.Kill or mData.Skinning)) then
@@ -4392,9 +4949,9 @@ function DropCount.MT:MergeMOB(mob,strict)
 	-- Traverse hardcoded items
 	-- Do normal kill/loot
 	if (kill) then
-		for item,iRaw in pairs(LootCount_DropCount_MergeData.Item) do
+		for item,iRaw in pairs(LootCount_DropCount_MergeData[mdSection].Item) do
 			if (DropCount.DB:PreCheck(iRaw,mob)) then
-				local iTable=DropCount.DB.Item:Read(item,LootCount_DropCount_MergeData.Item);
+				local iTable=DropCount.DB.Item:Read(item,LootCount_DropCount_MergeData[mdSection].Item);
 				if (iTable.Name and iTable.Name[mob]) then	-- Exists in source
 					local miTable;
 					if (not LootCount_DropCount_DB.Item[item]) then		-- Unknown item in target
@@ -4427,9 +4984,9 @@ function DropCount.MT:MergeMOB(mob,strict)
 --DropCount:Chat("-> DropCount.MT:MergeMOB -> Profs");
 	-- Do profession-loot
 	if (skinning) then
-		for item,iRaw in pairs(LootCount_DropCount_MergeData.Item) do
+		for item,iRaw in pairs(LootCount_DropCount_MergeData[mdSection].Item) do
 			if (DropCount.DB:PreCheck(iRaw,mob)) then
-				local iTable=DropCount.DB.Item:Read(item,LootCount_DropCount_MergeData.Item);
+				local iTable=DropCount.DB.Item:Read(item,LootCount_DropCount_MergeData[mdSection].Item);
 				if (iTable.Skinning and iTable.Skinning[mob]) then	-- Exists in source
 					local miTable;
 					if (not LootCount_DropCount_DB.Item[item]) then		-- Unknown item in target
@@ -4476,11 +5033,12 @@ function DropCount.Menu:AddHeader(text,icon)
 	info.icon=icon;
 	UIDropDownMenu_AddButton(info,1);
 end
-function DropCount.Menu:AddChecker(text,value,func,icon)
+function DropCount.Menu:AddChecker(text,switch,func,icon)
 	local info=UIDropDownMenu_CreateInfo();
 	info.text=CONST.C_BASIC..text;
-	if (value) then info.text=info.text..CONST.C_GREEN.."ON"; else info.text=info.text..CONST.C_RED.."OFF"; end
-	info.func=func;
+	info.value=switch;
+	if (LootCount_DropCount_DB[switch]) then info.text=info.text..CONST.C_GREEN.."ON"; else info.text=info.text..CONST.C_RED.."OFF"; end
+	info.func=DropCount.Menu.ToggleSwitch;
 	info.icon=icon;
 	UIDropDownMenu_AddButton(info,1);
 end
@@ -4494,89 +5052,39 @@ end
 
 function DropCountXML.Menu.MinimapInitialise()
 	DropCount.Menu:AddHeader("GUI");
-	DropCount.Menu:AddButton("Open search-window",DropCount.Menu.OpenSearchWindow,"");
+	DropCount.Menu:AddButton("Search...",DropCount.Menu.OpenSearchWindow,"");
+	DropCount.Menu:AddButton("Options...",DropCount.Menu.OpenOptionsWindow,"");
 
 	DropCount.Menu:AddHeader(" ");
 	DropCount.Menu:AddHeader("Minimap");
-	DropCount.Menu:AddChecker("Vendors: ",LootCount_DropCount_DB.VendorMinimap,DropCount.Menu.ToggleVendorsMinimap,"Interface\\GROUPFRAME\\UI-Group-MasterLooter");
-	DropCount.Menu:AddChecker("Repair: ",LootCount_DropCount_DB.RepairMinimap,DropCount.Menu.ToggleRepairMinimap,"Interface\\GossipFrame\\VendorGossipIcon");
-	DropCount.Menu:AddChecker("Books: ",LootCount_DropCount_DB.BookMinimap,DropCount.Menu.ToggleBookMinimap,"Interface\\Spellbook\\Spellbook-Icon");
-	DropCount.Menu:AddChecker("Quests: ",LootCount_DropCount_DB.QuestMinimap,DropCount.Menu.ToggleQuestMinimap,"Interface\\QuestFrame\\UI-Quest-BulletPoint");
-	DropCount.Menu:AddChecker("Trainers: ",LootCount_DropCount_DB.TrainerMinimap,DropCount.Menu.ToggleTrainerMinimap,"Interface\\Icons\\INV_Misc_QuestionMark");
-	DropCount.Menu:AddChecker("Forges: ",LootCount_DropCount_DB.ForgeMinimap,DropCount.Menu.ToggleForgeMinimap,CONST.PROFICON[5]);
+	DropCount.Menu:AddChecker("Vendors: ","VendorMinimap","Interface\\GROUPFRAME\\UI-Group-MasterLooter");
+	DropCount.Menu:AddChecker("Repair: ","RepairMinimap","Interface\\GossipFrame\\VendorGossipIcon");
+	DropCount.Menu:AddChecker("Books: ","BookMinimap","Interface\\Spellbook\\Spellbook-Icon");
+	DropCount.Menu:AddChecker("Quests: ","QuestMinimap","Interface\\QuestFrame\\UI-Quest-BulletPoint");
+	DropCount.Menu:AddChecker("Trainers: ","TrainerMinimap","Interface\\Icons\\INV_Misc_QuestionMark");
+	DropCount.Menu:AddChecker("Forges: ","ForgeMinimap",CONST.PROFICON[5]);
 
 	DropCount.Menu:AddHeader(" ");
 	DropCount.Menu:AddHeader("Worldmap");
-	DropCount.Menu:AddChecker("Vendors: ",LootCount_DropCount_DB.VendorWorldmap,DropCount.Menu.ToggleVendorsWorldmap,"Interface\\GROUPFRAME\\UI-Group-MasterLooter");
-	DropCount.Menu:AddChecker("Repair: ",LootCount_DropCount_DB.RepairWorldmap,DropCount.Menu.ToggleRepairWorldmap,"Interface\\GossipFrame\\VendorGossipIcon");
-	DropCount.Menu:AddChecker("Books: ",LootCount_DropCount_DB.BookWorldmap,DropCount.Menu.ToggleBookWorldmap,"Interface\\Spellbook\\Spellbook-Icon");
-	DropCount.Menu:AddChecker("Quests: ",LootCount_DropCount_DB.QuestWorldmap,DropCount.Menu.ToggleQuestWorldmap,"Interface\\QuestFrame\\UI-Quest-BulletPoint");
-	DropCount.Menu:AddChecker("Trainers: ",LootCount_DropCount_DB.TrainerWorldmap,DropCount.Menu.ToggleTrainerWorldmap,"Interface\\Icons\\INV_Misc_QuestionMark");
-	DropCount.Menu:AddChecker("Forges: ",LootCount_DropCount_DB.ForgeWorldmap,DropCount.Menu.ToggleForgeWorldmap,CONST.PROFICON[5]);
+	DropCount.Menu:AddChecker("Vendors: ","VendorWorldmap","Interface\\GROUPFRAME\\UI-Group-MasterLooter");
+	DropCount.Menu:AddChecker("Repair: ","RepairWorldmap","Interface\\GossipFrame\\VendorGossipIcon");
+	DropCount.Menu:AddChecker("Books: ","BookWorldmap","Interface\\Spellbook\\Spellbook-Icon");
+	DropCount.Menu:AddChecker("Quests: ","QuestWorldmap","Interface\\QuestFrame\\UI-Quest-BulletPoint");
+	DropCount.Menu:AddChecker("Trainers: ","TrainerWorldmap","Interface\\Icons\\INV_Misc_QuestionMark");
+	DropCount.Menu:AddChecker("Forges: ","ForgeWorldmap",CONST.PROFICON[5]);
 end
 
-function DropCount.Menu.ToggleTrainerMinimap()
-	if (LootCount_DropCount_DB.TrainerMinimap) then LootCount_DropCount_DB.TrainerMinimap=nil;
-	else LootCount_DropCount_DB.TrainerMinimap=true; end
+function DropCount.Menu.ToggleSwitch(switch)
+	if (LootCount_DropCount_DB[switch.value]) then LootCount_DropCount_DB[switch.value]=nil;
+	else LootCount_DropCount_DB[switch.value]=true; end
 	MT:Run("MM Plot",DropCount.MT.Icons.PlotMinimap);
 end
-function DropCount.Menu.ToggleTrainerWorldmap()
-	if (LootCount_DropCount_DB.TrainerWorldmap) then LootCount_DropCount_DB.TrainerWorldmap=nil;
-	else LootCount_DropCount_DB.TrainerWorldmap=true; end
-	MT:Run("WM Plot",DropCount.MT.Icons.PlotWorldmap);		--	DropCount.Icons:Plot();
-end
-function DropCount.Menu.ToggleForgeMinimap()
-	if (LootCount_DropCount_DB.ForgeMinimap) then LootCount_DropCount_DB.ForgeMinimap=nil;
-	else LootCount_DropCount_DB.ForgeMinimap=true; end
-	MT:Run("MM Plot",DropCount.MT.Icons.PlotMinimap);
-end
-function DropCount.Menu.ToggleForgeWorldmap()
-	if (LootCount_DropCount_DB.ForgeWorldmap) then LootCount_DropCount_DB.ForgeWorldmap=nil;
-	else LootCount_DropCount_DB.ForgeWorldmap=true; end
-	MT:Run("WM Plot",DropCount.MT.Icons.PlotWorldmap);		--	DropCount.Icons:Plot();
-end
-function DropCount.Menu.ToggleRepairMinimap()
-	if (LootCount_DropCount_DB.RepairMinimap) then LootCount_DropCount_DB.RepairMinimap=nil;
-	else LootCount_DropCount_DB.RepairMinimap=true; end
-	MT:Run("MM Plot",DropCount.MT.Icons.PlotMinimap);
-end
-function DropCount.Menu.ToggleRepairWorldmap()
-	if (LootCount_DropCount_DB.RepairWorldmap) then LootCount_DropCount_DB.RepairWorldmap=nil;
-	else LootCount_DropCount_DB.RepairWorldmap=true; end
-	MT:Run("WM Plot",DropCount.MT.Icons.PlotWorldmap);		--	DropCount.Icons:Plot();
-end
-function DropCount.Menu.ToggleVendorsMinimap()
-	if (LootCount_DropCount_DB.VendorMinimap) then LootCount_DropCount_DB.VendorMinimap=nil;
-	else LootCount_DropCount_DB.VendorMinimap=true; end
-	MT:Run("MM Plot",DropCount.MT.Icons.PlotMinimap);
-end
-function DropCount.Menu.ToggleVendorsWorldmap()
-	if (LootCount_DropCount_DB.VendorWorldmap) then LootCount_DropCount_DB.VendorWorldmap=nil;
-	else LootCount_DropCount_DB.VendorWorldmap=true; end
-	MT:Run("WM Plot",DropCount.MT.Icons.PlotWorldmap);		--	DropCount.Icons:Plot();
-end
-function DropCount.Menu.ToggleBookMinimap()
-	if (LootCount_DropCount_DB.BookMinimap) then LootCount_DropCount_DB.BookMinimap=nil;
-	else LootCount_DropCount_DB.BookMinimap=true; end
-	MT:Run("MM Plot",DropCount.MT.Icons.PlotMinimap);
-end
-function DropCount.Menu.ToggleBookWorldmap()
-	if (LootCount_DropCount_DB.BookWorldmap) then LootCount_DropCount_DB.BookWorldmap=nil;
-	else LootCount_DropCount_DB.BookWorldmap=true; end
-	MT:Run("WM Plot",DropCount.MT.Icons.PlotWorldmap);		--	DropCount.Icons:Plot();
-end
-function DropCount.Menu.ToggleQuestMinimap()
-	if (LootCount_DropCount_DB.QuestMinimap) then LootCount_DropCount_DB.QuestMinimap=nil;
-	else LootCount_DropCount_DB.QuestMinimap=true; end
-	MT:Run("MM Plot",DropCount.MT.Icons.PlotMinimap);
-end
-function DropCount.Menu.ToggleQuestWorldmap()
-	if (LootCount_DropCount_DB.QuestWorldmap) then LootCount_DropCount_DB.QuestWorldmap=nil;
-	else LootCount_DropCount_DB.QuestWorldmap=true; end
-	MT:Run("WM Plot",DropCount.MT.Icons.PlotWorldmap);		--	DropCount.Icons:Plot();
-end
+
 function DropCount.Menu.OpenSearchWindow()
 	LCDC_VendorSearch:Show();
+end
+function DropCount.Menu.OpenOptionsWindow()
+	LCDC_ListOfOptions:Show();
 end
 
 --[[	Minimap icon stuff	]]
@@ -4588,8 +5096,11 @@ function DropCountXML.MinimapOnEnter(frame)
 	GameTooltip:LCAddLine(CONST.C_BASIC.."<Left-click>|r for menu");
 	GameTooltip:LCAddLine(CONST.C_BASIC.."<Right-click>|r and drag to move");
 	GameTooltip:LCAddLine(CONST.C_BASIC.."<Shift-right-click>|r and drag for free-move");
-	if (DropCount.Registered) then
+	if (DropCount.LootCount.Registered) then
 		GameTooltip:LCAddLine(CONST.C_BASIC.."LootCount: "..CONST.C_GREEN.."Present");
+	end
+	if (DropCount.Crawler.Registered) then
+		GameTooltip:LCAddLine(CONST.C_BASIC.."Crawler: "..CONST.C_GREEN.."Present");
 	end
 	GameTooltip:Show();
 end
@@ -4668,9 +5179,10 @@ end
 
 -- Multi-threading utility
 function MT:Run(name,func,...)
+debugtimerthing=debugprofilestop();
 	for _,tTable in pairs(self.Threads) do
 		if (tTable.orig==func and tTable.name==name) then
-			if (dbg) then dbg.print(name,"MT> Already running in another thread. Aborted."); end
+			if (DropCount.Debug) then print(name.."> Already running in another thread. Aborted."); end
 			return;
 		end
 	end
@@ -4683,7 +5195,7 @@ function MT:Run(name,func,...)
 	self.Threads[self.Count].cr=coroutine.create(func);
 	self.LastTime=debugprofilestop();
 	self.LastStack="Running "..name;
-	self.Speed=(1/30)*1000;
+--	self.Speed=(1/30)*1000;
 	-- For running without timer
 --	self.PassCounter=0;
 --	if (not self.Multiplier) then self.Multiplier=500; end
@@ -4697,14 +5209,17 @@ function MT:Run(name,func,...)
 end
 
 -- Timer version
-function MT:Yield(immediate,dbdata)
-	self.LastStack=debugstack(2);
+function MT:Yield(fast,dbdata)
 	local now=debugprofilestop();
-	if (not immediate) then
-		if (now-self.LastTime<self.Speed) then return; end
-	end
-	self.LastTime=now;		-- Inaccurate to account for other snags
+	self.LastStack=debugstack(2);
+	local speed=self.Speed;
+	if (fast) then speed=self.FastMT; end
+	if (now-self.LastTime<=speed) then return; end
+--print(speed," ",now-self.LastTime);
+	self.LastTime=now;
+--if (ChatFrame3) then local tm=(debugprofilestop()-debugtimerthing)/1000; if (tm>debugtimerthingbig) then debugtimerthingbig=tm; end ChatFrame3:AddMessage(string.format("---===>>> %.05f (%.05f)",tm,debugtimerthingbig)); end
 	coroutine.yield();
+debugtimerthing=debugprofilestop();
 	self.LastStack=debugstack(2);
 end
 
@@ -4720,7 +5235,7 @@ function MT:Yield(immediate,dbdata)
 	self.LastStack=debugstack(2);
 end]]
 
-function MT:Next(elapsed)
+function MT:Next()
 	if (self.Count<1) then return; end
 	if (self.RunningCo) then return; end	-- Don't if we are already doing it. In case of real MT.
 	-- Set timing for MT yield
@@ -4922,9 +5437,9 @@ function Table:Read(who,entry,base,section)
 	return cache[entry];
 end
 
-function Table:PurgeCache(who)
+function Table:PurgeCache(who,nocollect)
 	wipe(self.Default[who].Cache);
-	collectgarbage("collect");
+--	if (not nocollect) then collectgarbage("collect"); end
 end
 
 -- Safe table-copy with optional merge (equal entries will be overwritten, arg1 has pri)
@@ -4938,3 +5453,43 @@ function DropCount:CopyTable(t,new)
 	end
 	return new;
 end
+
+-- Crawler support
+function DropCount.Crawler.GenerateWN(data)
+	local pageTOP=[[<wn><body><h1 align="center">]]..LOOTCOUNT_DROPCOUNT_VERSIONTEXT..[[</h1><h2 align="center">WoWnet interface</h2>]];
+	local pageBOT=[[</body></wn>]];
+	local pageSRC=[[
+<set form="DropCount_Search"/>
+  <text pad="25">Search DropCount:</text>
+  <edit id="EDIT_search" glue="LEFT" pad="5"/>
+  <button width="200" send="form">Search</button>
+<set form=""/>]]
+	local pageMSG=[[<text pad="25">%s</text>]];
+	if (not data or data=="" or data=="search") then
+		return pageTOP..pageSRC..pageBOT;
+	end
+	if (data:find("search:",1,true)==1) then
+		data=data:sub(8);
+		data=strtrim(data);
+		if (data=="") then return pageTOP..string.format(pageMSG,"No search-phrase specified")..pageSRC..pageBOT; end
+		-- do the search
+		DropCount.Search:Do(data,true,true,true,true,true,true);
+		-- build the WN code
+		local page=pageTOP..pageSRC;
+		for section,sTable in pairs(DropCount.Search._result) do
+			page=page..[[<h2 pad="10">]]..section..[[</h2>]];
+			for _,entry in pairs(sTable) do
+				if (entry.Icon) then
+					page=page..[[<img width="14" height="14" pad="10">]]..entry.Icon..[[</img>]];
+					page=page..[[<text glue="left" pad="3">]]..entry.Entry..[[</text>]];
+				else
+					page=page..[[<text pad="27">]]..entry.Entry..[[</text>]];
+				end
+			end
+		end
+		return page..pageBOT;
+	end
+	return pageTOP..string.format(pageMSG,"Unknown DropCount request")..pageSRC..pageBOT;
+end
+
+DropCount.Crawler._Description="DropCount remote: Allows users of Crawler to search your DropCount database.";

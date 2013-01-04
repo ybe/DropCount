@@ -37,11 +37,11 @@
 				</FontString>
 			</Layer>
 		</Layers>
-		<NormalTexture file=""/>
+		<NormalTexture/>
 		<PushedTexture file="Interface\Buttons\UI-Listbox-Highlight2"/>
 		<CheckedTexture file="Interface\Buttons\UI-Listbox-Highlight2" alphaMode="ADD"/>
 		<HighlightTexture file="Interface\Buttons\UI-Listbox-Highlight" alphaMode="ADD"/>
-		<DisabledTexture file=""/>
+		<DisabledTexture/>
 		<NormalFont inherits="GameFontHighlight" justifyH="LEFT"/>
 		<HighlightFont inherits="GameFontHighlight" justifyH="LEFT"/>
 		<DisabledFont inherits="GameFontDisable" justifyH="LEFT"/>

@@ -21,3 +21,4 @@ Special items
 Normal items are counted on a per-kill basis.
 Skinning-drops are counted on a per-skinned basis.
 Quest-items are not counted, as they will require you to be on a quest for it to drop. These items will however show up as "Quest" in stead of a percentage.
+ to be on a quest for it to drop. These items will however show up as "Quest" in stead of a percentage.

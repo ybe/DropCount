@@ -1,5 +1,5 @@
 ﻿--[[****************************************************************
-	LootCount DropCount v1.40
+	LootCount DropCount v1.42
 
 	Author: Evil Duck
 	****************************************************************
@@ -9,6 +9,7 @@
 
 	****************************************************************]]
 
+-- 1.42 Skipped 5.2's added money loot
 -- 1.40 Added forges and trainers, new icon plot code (compacted), merge
 --      forges and trainers, options gui, BG DB cleaning, selective
 --      exclusion of DB sections, compact TT option, 'Count' added to
@@ -84,7 +85,7 @@
 local debugtimerthing,debugtimerthingbig=0,0;
 
 local _;
-LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v1.40";
+LOOTCOUNT_DROPCOUNT_VERSIONTEXT = "DropCount v1.42";
 LOOTCOUNT_DROPCOUNT = "DropCount";
 SLASH_DROPCOUNT1 = "/dropcount";
 SLASH_DROPCOUNT2 = "/lcdc";
@@ -824,14 +825,16 @@ function DropCount:FixLootAmounts()
 	local mobs={};
 	for i=1,slots do
 		local item=DropCount:GetID(GetLootSlotLink(i));
-		local t={GetLootSourceInfo(i)};
-		for j=1,#t,2 do
-			if (not mobs[t[j] ]) then mobs[t[j] ]={}; end
-			local buf={ Count=t[j+1], Item=item };		-- create LootList-type table per unit
-			if (DropCount.Profession) then				-- don't resolve aoe loot on prof-loot
-				buf.Count=items[item];					-- use total count
+		if (item) then										-- not money
+			local t={GetLootSourceInfo(i)};
+			for j=1,#t,2 do
+				if (not mobs[t[j] ]) then mobs[t[j] ]={}; end
+				local buf={ Count=t[j+1], Item=item };		-- create LootList-type table per unit
+				if (DropCount.Profession) then				-- don't resolve aoe loot on prof-loot
+					buf.Count=items[item];					-- use total count
+				end
+				table.insert(mobs[t[j] ],buf);				-- create LootList-type table per unit
 			end
-			table.insert(mobs[t[j] ],buf);				-- create LootList-type table per unit
 		end
 	end
 -- mob list
@@ -846,7 +849,7 @@ function DropCount:FixLootAmounts()
 	for m,d in pairs(mobs) do		-- guid
 		for _,mi in pairs(d) do		-- indexed mob items
 			if (not vitems[mi.Item]) then
-				vitems[mi.Item]={ mobs=1, amount=mi.Count, guid={ m } };
+				vitems[mi.Item]={ mobs=1, amount=mi.Count, guid={ m } };	-- index is nil ("Count" missing)
 			else
 				vitems[mi.Item].mobs=vitems[mi.Item].mobs+1;
 				vitems[mi.Item].amount=vitems[mi.Item].amount+mi.Count;
@@ -1213,7 +1216,8 @@ function DropCountXML:OnEvent(_,event,...)
 		DropCount:ConvertBookFormat();
 		Astrolabe:Register_OnEdgeChanged_Callback(DropCountXML.AstrolabeEdge,1);
 		LootCount_DropCount_DB.RAID=nil;
-		if (IsInGuild()) then LootCount_DropCount_DB.GUILD=true; else LootCount_DropCount_DB.GUILD=nil; end
+		LootCount_DropCount_DB.GUILD=nil;
+--		if (IsInGuild()) then LootCount_DropCount_DB.GUILD=true; else LootCount_DropCount_DB.GUILD=nil; end
 		DropCount:RemoveFromDatabase();
 		LootCount_DropCount_RemoveData=nil;
 
@@ -1482,7 +1486,7 @@ end
 
 function DropCount:GetQuestNames()
 	if (not LootCount_DropCount_DB.QuestQuery) then return; end
-	LootCount_DropCount_DB.TesterTable=self:CopyTable(LootCount_DropCount_DB.QuestQuery);
+--	LootCount_DropCount_DB.TesterTable=self:CopyTable(LootCount_DropCount_DB.QuestQuery);
 --print("questquery:",self:Length(LootCount_DropCount_DB.QuestQuery));
 	if (not LootCount_DropCount_Character.DoneQuest) then
 		LootCount_DropCount_Character.DoneQuest={};
@@ -1686,30 +1690,32 @@ function DropCount.Quest:Scan()
 
 	-- Shove numbers
 	i=1;
-	while(LootCount_DropCount_Character.LastQG[i]) do	-- q-givers list
-		if (LootCount_DropCount_DB.Quest[CONST.MYFACTION][LootCount_DropCount_Character.LastQG[i]]) then
-			local tqg=DropCount.DB.Quest:Read(CONST.MYFACTION,LootCount_DropCount_Character.LastQG[i]);
-			local changed=nil;
-			if (tqg and tqg.Quests) then				-- Same q-giver from database
-				local qi=1;
-				while (tqg.Quests[qi] and not changed) do
-					if (not tqg.Quests[qi].ID) then
-						for qname,qnTable in pairs(LootCount_DropCount_Character.Quests) do
-							if (tqg.Quests[qi].Quest==qname) then
-								tqg.Quests[qi].ID=qnTable.ID;	-- Set ID
-								changed=true;
+	if (LootCount_DropCount_DB.Quest[CONST.MYFACTION]) then
+		while(LootCount_DropCount_Character.LastQG[i]) do	-- q-givers list
+			if (LootCount_DropCount_DB.Quest[CONST.MYFACTION][LootCount_DropCount_Character.LastQG[i]]) then
+				local tqg=DropCount.DB.Quest:Read(CONST.MYFACTION,LootCount_DropCount_Character.LastQG[i]);
+				local changed=nil;
+				if (tqg and tqg.Quests) then				-- Same q-giver from database
+					local qi=1;
+					while (tqg.Quests[qi] and not changed) do
+						if (not tqg.Quests[qi].ID) then
+							for qname,qnTable in pairs(LootCount_DropCount_Character.Quests) do
+								if (tqg.Quests[qi].Quest==qname) then
+									tqg.Quests[qi].ID=qnTable.ID;	-- Set ID
+									changed=true;
+								end
+								if (changed) then break; end	-- This q okay
 							end
-							if (changed) then break; end	-- This q okay
 						end
+						qi=qi+1
 					end
-					qi=qi+1
+				end
+				if (changed) then
+					DropCount.DB.Quest:Write(LootCount_DropCount_Character.LastQG[i],tqg,CONST.MYFACTION);
 				end
 			end
-			if (changed) then
-				DropCount.DB.Quest:Write(LootCount_DropCount_Character.LastQG[i],tqg,CONST.MYFACTION);
-			end
+			i=i+1
 		end
-		i=i+1
 	end
 end
 
@@ -2238,6 +2244,7 @@ function DropCount.Com:Transmit(GUID,mob,item,count,source)
 
 	local text;
 	if (item and count) then
+		mob=mob or "";
 		text=COM.MOBLOOT..COM.SEPARATOR..GUID..COM.SEPARATOR..mob..COM.SEPARATOR..item..COM.SEPARATOR..count;
 		if (source) then	-- Anything but normal loot
 			text=text..COM.SEPARATOR.."SKIN";
@@ -2255,6 +2262,7 @@ end
 -- COM.MOBLOOT - GUID - MOBNAME - ITEM - COUNT
 function DropCount.Com:ParseMessage(text,sender)
 	local header,guid,mob,item,count,source=strsplit(COM.SEPARATOR,text);
+	if (mob=="") then mob=nil; end
 	if (header==COM.MOBKILL) then
 		DropCount:AddKill(nil,guid,guid:sub(7,10),mob,nil,nil,true,item);
 		if (DropCount.Debug) then
@@ -3201,6 +3209,7 @@ function DropCount:SetLootlist(unit,sguid,AltTT,compact)
 	local line=1;
 	local missingitems=0;
 	local itemsinlist=nil;
+	local singlelist={};
 	for item,iData in pairs(LootCount_DropCount_DB.Item) do
 		if (iData:find(sguid,1,true)) then		-- Plain search
 			local iTable=DropCount.DB.Item:Read(item);
@@ -3216,11 +3225,15 @@ function DropCount:SetLootlist(unit,sguid,AltTT,compact)
 					DropCount.Cache:AddItem(item);
 					missingitems=missingitems+1;
 				elseif (LootCount_DropCount_Character.ShowSingle or questitem or iTable.Name[sguid]~=1) then
-					local _,_,_,colour=GetItemQualityColor(rarity); colour="|c"..colour;
-					local thisratio,_,thissafe=DropCount:GetRatio(item,sguid);
-					list[line]={ Ltext=colour.."["..itemname.."]|r: ", ratio=thisratio, NoSafe=thissafe };
-					if (iTable.Quest) then list[line].Quests=DropCount:CopyTable(iTable.Quest); end
-					line=line+1;
+					if (LootCount_DropCount_Character.ShowSingle and iTable.Name[sguid]==1) then
+						if (not singlelist[rarity]) then singlelist[rarity]=1; else singlelist[rarity]=singlelist[rarity]+1; end
+					else
+						local _,_,_,colour=GetItemQualityColor(rarity); colour="|c"..colour;
+						local thisratio,_,thissafe=DropCount:GetRatio(item,sguid);
+						list[line]={ Ltext=colour.."["..itemname.."]|r: ", ratio=thisratio, NoSafe=thissafe };
+						if (iTable.Quest) then list[line].Quests=DropCount:CopyTable(iTable.Quest); end
+						line=line+1;
+					end
 					itemsinlist=true;
 				end
 			end
@@ -3251,11 +3264,27 @@ function DropCount:SetLootlist(unit,sguid,AltTT,compact)
 	AltTT.Loading=nil;
 	if (not itemsinlist) then AltTT:Hide(); return; end
 
+	local smallspace=nil;
+	if (next(singlelist)) then
+		for rarity,count in pairs(singlelist) do
+			local _,_,_,colour=GetItemQualityColor(rarity); colour="|c"..colour;
+			list[line]={ Ltext="    "..count.." x "..colour.."single drop items|r", ratio=-100 };
+			line=line+1;
+		end
+		smallspace=true;
+	end
+
 	-- Build the window on screen
 	list=DropCount:SortByRatio(list);
 	line=1;
 	while(list[line]) do
-		AltTT:LCAddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1);
+		if (list[line].ratio==-100) then
+			if (smallspace) then
+				AltTT:LCAddSmallLine(" ",1,1,1);
+				smallspace=nil;
+			end
+			AltTT:LCAddSmallLine(list[line].Ltext,1,1,1);
+		else AltTT:LCAddDoubleLine(list[line].Ltext,list[line].Rtext,1,1,1,1,1,1); end
 		if (((compact and IsShiftKeyDown()) or not compact) and list[line].Quests) then
 			for quest,amount in pairs(list[line].Quests) do
 				if (LootCount_DropCount_DB.Quest and LootCount_DropCount_DB.Quest[CONST.MYFACTION]) then

@@ -1,14 +1,13 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/"   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"   xsi:schemaLocation="http://www.blizzard.com/wow/ui/">
 	<Script file="LootCount_DropCount.lua" />
+	<GameTooltip name="LootCount_DropCount_GD" inherits="GameTooltipTemplate" frameStrata="TOOLTIP" hidden="true"/>
 	<GameTooltip name="LootCount_DropCount_TT" inherits="GameTooltipTemplate" frameStrata="TOOLTIP" hidden="true"/>
 	<GameTooltip name="LootCount_DropCount_CF" inherits="GameTooltipTemplate" parent="UIParent" hidden="true"/>
 	<Frame name="LootCount_DropCount_HiddenCacheFrame" visible="false">
 		<Scripts>
 			<OnLoad>DropCountXML:OnLoad(self);</OnLoad>
 			<OnEvent>DropCountXML:OnEvent(self,event,...);</OnEvent>
-			<OnUpdate>
-				DropCountXML:OnUpdate(self,elapsed);
-			</OnUpdate>
+			<OnUpdate>DropCountXML:OnUpdate(self,elapsed);</OnUpdate>
 		</Scripts>
 	</Frame>
 
@@ -77,7 +76,6 @@
 		<Anchors>
 			<Anchor point="TOPLEFT"><Offset><AbsDimension x="50" y="-104"/></Offset></Anchor>
 		</Anchors>
-
 		<TitleRegion setAllPoints="true"/>
 		<Backdrop edgeFile="Interface\TutorialFrame\TutorialFrameBorder" bgFile="Interface\GLUES\MODELS\UI_MainMenu_BurningCrusade\dp_nebula" tile="false">
 			<EdgeSize><AbsValue val="32"/></EdgeSize>
@@ -184,7 +182,6 @@
 				</Scripts>
 			</Frame>
 		</Frames>
-
 		<Layers>
 			<Layer level="ARTWORK">
 				<FontString inherits="GameFontHighlight" text="DropCount database search">
@@ -198,6 +195,138 @@
 							<Offset><AbsDimension x="70" y="-100"/></Offset>
 						</Anchor>
 					</Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
+		<Scripts>
+			<OnUpdate> </OnUpdate>
+			<Scripts>
+				<OnEvent>DropCountXML:OnEvent(self,event,...)</OnEvent>
+			</Scripts>
+		</Scripts>
+	</Frame>
+
+	<Frame name="DropCount_GridFilterFrame" frameStrata="HIGH" toplevel="true" movable="true" enableMouse="true" hidden="true" parent="UIParent">
+		<Size><AbsDimension x="400" y="450"/></Size>
+		<Anchors>
+			<Anchor point="TOPLEFT"><Offset><AbsDimension x="50" y="-104"/></Offset></Anchor>
+		</Anchors>
+		<TitleRegion setAllPoints="true"/>
+		<Backdrop edgeFile="Interface\TutorialFrame\TutorialFrameBorder" bgFile="Interface\GLUES\MODELS\UI_MainMenu_BurningCrusade\dp_nebula" tile="false">
+			<EdgeSize><AbsValue val="32"/></EdgeSize>
+			<TileSize><AbsValue val="16"/></TileSize>
+			<BackgroundInsets><AbsInset left="2" right="2" top="2" bottom="2"/></BackgroundInsets>
+		</Backdrop>
+		<Frames>
+			<!-- The window closer -->
+			<Button name="$parent_CloseButton" inherits="UIPanelCloseButton">
+				<Anchors>
+					<Anchor point="CENTER" relativePoint="TOPRIGHT"><Offset><AbsDimension x="-12" y="-12"/></Offset></Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>self:GetParent():Hide();</OnClick>
+				</Scripts>
+			</Button>
+			<!-- The search-term -->
+			<EditBox name="$parent_FindText" autoFocus="false" inherits="DuckMod_EditText_01">
+				<Size><AbsDimension x="201" y="20"/></Size>
+				<Anchors>
+					<Anchor point="TOP"><Offset><AbsDimension y="-25"/></Offset></Anchor>
+					<Anchor point="LEFT"><Offset><AbsDimension x="75"/></Offset></Anchor>
+				</Anchors>
+				<Scripts>
+					<OnEnterPressed>DropCountXML:Filter_Search();</OnEnterPressed>
+				</Scripts>
+			</EditBox>
+			<Button name="$parent_DoFind" inherits="UIPanelButtonTemplate" text="Find">
+				<Size><AbsDimension x="80" y="22"/></Size>
+				<Anchors>
+					<Anchor point="LEFT" relativeTo="$parent_FindText" relativePoint="RIGHT"><Offset><AbsDimension x="20"/></Offset></Anchor>
+					<Anchor point="RIGHT"><Offset><AbsDimension x="-20"/></Offset></Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>DropCountXML:Filter_Search();</OnClick>
+				</Scripts>
+			</Button>
+			<!-- Active filters -->
+			<Frame name="$parent_Filters" inherits="DuckMod_ListBox_01">
+				<Anchors>
+					<Anchor point="TOP" relativePoint="BOTTOM" relativeTo="$parent_FindText"><Offset><AbsDimension y="-15"/></Offset></Anchor>
+					<Anchor point="LEFT"><Offset><AbsDimension x="20"/></Offset></Anchor>
+					<Anchor point="BOTTOMRIGHT"><Offset><AbsDimension x="-20" y="20" /></Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnEvent>DropCountXML:OnEvent(self,event,...)</OnEvent>
+				</Scripts>
+			</Frame>
+		</Frames>
+		<Layers>
+			<Layer level="ARTWORK">
+				<FontString inherits="GameFontHighlight" text="Grid filters">
+					<Anchors>
+						<Anchor point="TOP" relativeTo="$parent" relativePoint="TOP"><Offset><AbsDimension x="-10" y="-6"/></Offset></Anchor>
+					</Anchors>
+				</FontString>
+				<FontString inherits="GameFontHighlight" text="Find:">
+					<Anchors>
+						<Anchor point="TOPRIGHT" relativeTo="$parent" relativePoint="TOPLEFT">
+							<Offset><AbsDimension x="70" y="-28"/></Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
+		<Scripts>
+			<OnUpdate> </OnUpdate>
+			<Scripts>
+				<OnEvent>DropCountXML:OnEvent(self,event,...)</OnEvent>
+			</Scripts>
+		</Scripts>
+	</Frame>
+
+	<Frame name="DropCount_DataOptionsFrame" frameStrata="HIGH" toplevel="true" movable="true" enableMouse="true" hidden="true" parent="UIParent">
+		<Size><AbsDimension x="400" y="450"/></Size>
+		<Anchors><Anchor point="TOPLEFT"><Offset><AbsDimension x="50" y="-104"/></Offset></Anchor></Anchors>
+		<TitleRegion setAllPoints="true"/>
+		<Backdrop edgeFile="Interface\TutorialFrame\TutorialFrameBorder" bgFile="Interface\GLUES\MODELS\UI_MainMenu_BurningCrusade\dp_nebula" tile="false">
+			<EdgeSize><AbsValue val="32"/></EdgeSize>
+			<TileSize><AbsValue val="16"/></TileSize>
+			<BackgroundInsets><AbsInset left="2" right="2" top="2" bottom="2"/></BackgroundInsets>
+		</Backdrop>
+		<Frames>
+			<!-- The window closer -->
+			<Button name="$parent_CloseButton" inherits="UIPanelCloseButton">
+				<Anchors><Anchor point="CENTER" relativePoint="TOPRIGHT"><Offset><AbsDimension x="-12" y="-12"/></Offset></Anchor> </Anchors>
+				<Scripts>
+					<OnClick>if (DropCountXML:VerifySectionSettings()) then ReloadUI(); end self:GetParent():Hide();</OnClick>
+				</Scripts>
+			</Button>
+			<!-- Section list -->
+			<Frame name="$parent_List" inherits="DuckMod_ListBox_01">
+				<Anchors>
+					<Anchor point="TOPLEFT"><Offset><AbsDimension x="10" y="-120"/></Offset></Anchor>
+					<Anchor point="BOTTOMRIGHT"><Offset><AbsDimension x="-10" y="37" /></Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnEvent>DropCountXML:OnEvent(self,event,...)</OnEvent>
+				</Scripts>
+			</Frame>
+		</Frames>
+		<Layers>
+			<Layer level="ARTWORK">
+				<FontString inherits="GameFontHighlight" text="Global DropCount database settings">
+					<Anchors><Anchor point="TOP"><Offset><AbsDimension x="-10" y="-6"/></Offset></Anchor></Anchors>
+				</FontString>
+				<FontString name="$parent_Info" inherits="GameFontHighlight" multiline="true" text="-">
+					<Anchors>
+						<Anchor point="TOPLEFT"><Offset><AbsDimension x="10" y="-30"/></Offset></Anchor>
+						<Anchor point="BOTTOMRIGHT" relativePoint="TOPRIGHT"><Offset><AbsDimension x="-10" y="-120"/></Offset></Anchor>
+					</Anchors>
+				</FontString>
+				<FontString name="$parent_TotalBytes" inherits="GameFontHighlight" text="-">
+					<Anchors><Anchor point="BOTTOMLEFT"><Offset><AbsDimension x="10" y="10"/></Offset></Anchor></Anchors>
 				</FontString>
 			</Layer>
 		</Layers>

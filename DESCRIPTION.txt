@@ -1,24 +1,39 @@
-Drop-Count for LootCount
+DropCount: In general, DropCount tells you where stuff is. It's a repository for loot, quests, vendors, trainers, books, locations, ores, herbs, ratios, etc.
 
-Drop-Count for LootCount in short
-It will maintain a database over drop-rates (how often and from what mob) for items dropped by mobs.
+A day-to-day usage example could be when you are at the auction house and see an interesting item. You mouse-over it, and:
+1) press <Alt> to display a list of creatures that drops said item.
+2) press <Ctrl> to display a list of vendors that sells said item.
+If the item can be looted off a creature, the item tooltip will display which zone has the best drop chance.
 
-The collected information can be viewed in two ways:
-1: When you mouse-over a mob, you can hold down <alt> to display a list of items the mob may drop.
-2: When you mouse-over an item, you can press <alt> to display the mobs that drops this item.
+Another usage example could be if you need to level f.ex. tailoring and you need a lot of cloth. Mouse-over the cloth item and press the key binding for "Track item on worldmap". (Set-up: <Esc>, “Key Bindings”, scroll down). The item's drop areas will be shaded in the world map.
+This works for an unlimited number of simultaneous items, and even creatures.
+NOTE: This functionality was introduced in v1.50, and as such only limited data has been possible to supply with that version. Share your data and help each other out. New versions will be released when sufficient data has been submitted.
 
-Functionality
-Drop-Count for LootCount is a plug-in for the addon LootCount, and can thus be placed as a LootCount icon/watch. After positioning the plug-in within LootCount (fomr the LootCount menu) it will show up as a questionmark. You must now drop an item on it, and it will change to the icon of the item you dropped. When you start killing mobs, the icon will update with a percentage-number denoting the dropchance of the item. If you kill only mobs that have 100% drop-chance of the item, the number will be 100. If you kill equal amounts of mobs that drops it 100% and 0% it will show 50, and so on. This number is derived from kills the last 15 minutes.
-So if you are grinding for a specific item and this number is low, then you should probably go somewhere else.
+Looking up information
+DropCount comes with free-text search. Just open the search window from the minimap menu and enter whatever you need to find, or parts of it.
+Example: Enter "bouquet of black roses" to find all vendors of this item.
+Example: Enter "bouquet of" to find all such matching items. Should return a list of known flower bouquets and where to get them.
 
-Colour coding
-In the list of mobs that drops the item, the mobs are colour-coded from red to green. A red mob-name is a mob that you have not killed many of, and the reported drop-rate may be inaccurate. The more mobs you kill, the greener the name gets - and the reported drop-rate will be a lot more accurate.
+Already a DropCount user?
+- With your substantial database already in place, all possible care is taken during upgrade to keep your data in top working condition. When you install a new version, DropCount will perform a database maintenance cycle when merging new data with your existing data. Parts of this will be experienced by the player as quite heavy CPU usage, and your screen may become slightly choppy at certain isolated incidents. This is all dependent on the size and health of your database. You can however keep playing, as the maintenance is heavily throttled when you enter combat to make sure your gaming experience is at its best in combat.
+- The maintenance cycle will only be run once after upgrading the addon, and you can even log out during maintenance. However, the maintenance will rewind a bit before continuing when you log back in after interrupting it. No harm done, though. It will keep going until it has made it through all your data. When all data has been through maintenance, you will not be bothered by it again until you install a new version.
 
-The data
-Drop-Count for LootCount does not come with a pre-built database, so when you first install it, it is empty. Start killing mobs, and it will provide information for you quite fast.
+DropCount needs you
+When you play, DropCount is adding to its database. Because of this, your database is unique. We hope you will consider submitting your data to DropCount. Doing so will make you a participant in the growing family of DropCount data submitters, and your unique data will be part of the next release. Thanks to all submitters for your fantastic help so far.
 
-Special items
-Normal items are counted on a per-kill basis.
-Skinning-drops are counted on a per-skinned basis.
-Quest-items are not counted, as they will require you to be on a quest for it to drop. These items will however show up as "Quest" in stead of a percentage.
- to be on a quest for it to drop. These items will however show up as "Quest" in stead of a percentage.
+- You may be sitting on some unique data without even knowing about it. Share it with the rest of us by submitting your database.
+
+The easiest way to find the database is to search your computer for the "LootCount_DropCount.lua" file. There will be several found, and the biggest one is the database. This file can be submitted by:
+1) Email to "dropcount@ducklib.com".
+2) Upload at DuckLib ( http://www.ducklib.com/index.php/dropcount ). Only raw data-files allowed.
+
+Submitter's privacy
+The database does not contain any personal information. The most personal information you will find is your language locale. But you don't need to take my word for it. The database is a text file. Search it with a text editor for your server names, toons or whatever else that may come to mind.
+NOTE: If you do this, only view the file. Do not save the file from the text editor. The technical reason is that the file is heavily dependent on keeping its original byte coding. Your text editor may change that without telling you when you save the file, and your database will be broken beyond repair.
+You probably don't want that.
+
+Memory usage
+Some users have expressed concern over the memory usage of DropCount considering many (most) do not need or want all the data the addon has.
+As of DropCount v1.50, a data selector has been implemented. From the minimap menu, select "Data...".
+NOTE: Data you unselect will be permanently deleted.
+NOTE: These options apply to all toons within the same account.
